@@ -38,4 +38,10 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
+
+    @Column
+    private String avatar;
 }

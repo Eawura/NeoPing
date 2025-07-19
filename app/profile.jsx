@@ -87,18 +87,81 @@ const ProfileView = () => {
   const { themeColors } = useTheme();
   const router = useRouter();
   const { user: userParam, from, newsPosts, selectedPost: selectedPostParam } = useLocalSearchParams();
-  const { profile: currentUser } = useProfile();
+  const { profile: currentUser, loading, error, refreshProfile } = useProfile();
   const { posts: globalPosts, setPosts } = usePosts();
+
+  // Handle loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary} />
+        <Text style={{ marginTop: 10, color: themeColors.text }}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={{ color: themeColors.error, textAlign: 'center', marginBottom: 20 }}>
+          {error.includes('401') ? 'Please log in to view your profile' : `Error: ${error}`}
+        </Text>
+        <TouchableOpacity 
+          style={[styles.button, { 
+            backgroundColor: themeColors.primary,
+            padding: 15,
+            borderRadius: 5,
+            width: '80%',
+            alignItems: 'center',
+            marginTop: 10
+          }]}
+          onPress={error.includes('401') ? () => router.push('/(auth)/login') : refreshProfile}
+        >
+          <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+            {error.includes('401') ? 'Go to Login' : 'Retry'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Handle case when user is not logged in
+  if (!currentUser || !currentUser.username) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={{ color: themeColors.text, textAlign: 'center', marginBottom: 20, fontSize: 16 }}>
+          You need to be logged in to view this profile
+        </Text>
+        <TouchableOpacity 
+          style={[{
+            backgroundColor: themeColors.primary,
+            padding: 15,
+            borderRadius: 5,
+            width: '80%',
+            alignItems: 'center',
+            marginTop: 10
+          }]}
+          onPress={() => router.push('/(auth)/login')}
+        >
+          <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Log In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Use the current user's data if no specific user is provided in params
   let user = {};
   try {
-    user = typeof userParam === 'string' ? JSON.parse(userParam) : userParam || {};
+    user = userParam ? (typeof userParam === 'string' ? JSON.parse(userParam) : userParam) : currentUser;
   } catch {
-    user = userParam || {};
+    user = currentUser;
   }
   // Get userId from params (could be id or username)
   const userId = user.id;
   const username = (user.user || user.author || user.id || '').trim();
   const normalizedUsername = username.toLowerCase();
+
   // Debug logs for filtering
   let allUserFields = [];
   let posts = [];

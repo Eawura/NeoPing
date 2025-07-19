@@ -1,5 +1,6 @@
 package com.neoping.backend.controller;
 
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -7,14 +8,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import com.neoping.backend.dto.AuthenticationResponse;
 import com.neoping.backend.dto.LoginRequest;
 import com.neoping.backend.dto.RefreshTokenRequest;
 import com.neoping.backend.dto.RegisterRequest;
+import com.neoping.backend.dto.UpdateProfileRequest;
+import com.neoping.backend.dto.UserProfile;
+import com.neoping.backend.model.User;
 import com.neoping.backend.service.AuthService;
 import com.neoping.backend.service.RefreshTokenService;
 import com.neoping.backend.service.UserService;
@@ -88,4 +94,76 @@ public class AuthController {
         return ResponseEntity.ok("Logout successful");
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getCurrentUser() {
+        try {
+            logger.info("Attempting to get current user...");
+            User user = userService.getCurrentUser();
+            logger.info("Retrieved user: {}", user != null ? user.getUsername() : "null");
+            
+            if (user == null) {
+                logger.warn("No authenticated user found");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    Map.of(
+                        "status", 401,
+                        "error", "Unauthorized",
+                        "message", "No authenticated user found"
+                    )
+                );
+            }
+            
+            UserProfile profile = UserProfile.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .bio(user.getBio())
+                .avatar(user.getAvatar())
+                .build();
+                
+            logger.info("Successfully built profile for user: {}", user.getUsername());
+            return ResponseEntity.ok(profile);
+            
+        }
+        catch (Exception e) {
+            logger.error("Error getting current user", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                Map.of(
+                    "status", 500,
+                    "error", "Internal Server Error",
+                    "message", "An error occurred while retrieving user profile"
+                )
+            );
+        }
+    }
+    
+    @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> updateProfile(@RequestBody UpdateProfileRequest updateRequest) {
+        try {
+            logger.info("Attempting to update user profile...");
+            User updatedUser = userService.updateUserProfile(updateRequest);
+            logger.info("Successfully updated profile for user: {}", updatedUser.getUsername());
+            
+            UserProfile profile = UserProfile.builder()
+                .id(updatedUser.getId())
+                .username(updatedUser.getUsername())
+                .email(updatedUser.getEmail())
+                .bio(updatedUser.getBio())
+                .avatar(updatedUser.getAvatar())
+                .build();
+                
+            return ResponseEntity.ok(profile);
+            
+        } catch (Exception e) {
+            logger.error("Error updating user profile", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                Map.of(
+                    "status", 500,
+                    "error", "Internal Server Error",
+                    "message", "An error occurred while updating user profile"
+                )
+            );
+        }
+    }
 }

@@ -34,8 +34,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
         String path = request.getRequestURI();
-        // Exclude login and all /api/auth/** from JWT filtering
-        if (path.startsWith("/api/auth")) {
+        // Exclude login and signup from JWT filtering, but require authentication for /me
+        if (path.startsWith("/api/auth") && !path.equals("/api/auth/me")) {
             filterChain.doFilter(request, response);
             return;
         }
