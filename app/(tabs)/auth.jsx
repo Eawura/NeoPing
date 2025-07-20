@@ -96,6 +96,7 @@ export default function AuthScreen() {
       }, 800));
       // If successful:
       setModalVisible(false);
+      router.replace('/(tabs)/');
     } catch (err) {
       // Example error handling
       let toastMsg = 'Sign in failed. Please try again.';

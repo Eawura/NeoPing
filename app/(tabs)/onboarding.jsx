@@ -49,6 +49,11 @@ export default function OnboardingScreen() {
     }
   };
 
+  const handleDone = () => {
+    // Navigate to the auth screen when onboarding is complete
+    router.replace('/(tabs)/auth');
+  };
+
   const handleNext = () => {
     if (currentIndex < onboardingData.length - 1) {
       flatListRef.current.scrollToIndex({ index: currentIndex + 1 });
