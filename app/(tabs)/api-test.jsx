@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Button, ActivityIndicator, ScrollView, Platform } from 'react-native';
-import { useTheme } from '../../components/ThemeContext';
-import { login, getPosts, getCurrentUser } from '../../services';
-import { testConnection } from '../../utils/api';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Button,
+  ActivityIndicator,
+  ScrollView,
+} from "react-native";
+import { useTheme } from "../../components/ThemeContext";
+import { testConnection } from "../utils/api";
 
 export default function ApiTestScreen() {
   const [loading, setLoading] = useState(false);
@@ -14,158 +20,151 @@ export default function ApiTestScreen() {
     setLoading(true);
     setError(null);
     const results = {};
-    
+
     try {
-      // Test 1: Check API connection
-      results.connection = 'Checking connection...';
-      setTestResults({...results});
-      
-      // First test the basic connection
+      // === Test 1: Basic Connection ===
+      results.connection = "🔄 Checking connection...";
+      setTestResults({ ...results });
+
       const connectionTest = await testConnection();
       if (!connectionTest.success) {
-        throw new Error(`Cannot connect to backend: ${connectionTest.error}\n${connectionTest.suggestion}`);
+        throw new Error(`Connection failed: ${connectionTest.error}`);
       }
-      results.connection = '✅ Connected successfully!';
-      setTestResults({...results});
-      
-      // First, try to access the auth endpoint to check connection
-      // This endpoint supports OPTIONS for CORS preflight
-      try {
-        const response = await fetch('http://localhost:8082/api/auth/signup', {
-          method: 'OPTIONS', // Use OPTIONS to test CORS preflight
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (response.ok || response.status === 200) {
-          results.connection = '✅ Backend is reachable';
-          results.corsStatus = '✅ CORS is properly configured';
-        } else {
-          results.connection = `⚠️ Backend responded with status: ${response.status}`;
-        }
-      } catch (connErr) {
-        results.connection = '❌ Backend connection failed';
-        results.error = `Cannot connect to backend: ${connErr.message}`;
-        results.suggestion = 'Make sure your backend is running and accessible from this device/emulator. Check console for more details.';
-        console.error('Connection error details:', connErr);
-        setTestResults({...results});
-        throw new Error(`Cannot connect to backend: ${connErr.message}`);
+      results.connection = "✅ Backend is reachable";
+
+      // === Test 2: CORS Preflight ===
+      const corsTest = await fetch("http://localhost:8082/api/auth/signup", {
+        method: "OPTIONS",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (corsTest.ok) {
+        results.corsStatus = "✅ CORS is properly configured";
+      } else {
+        results.corsStatus = `⚠️ CORS response: ${corsTest.status}`;
       }
-      setTestResults({...results});
-      
-      // Test 2: Login with test user
-      results.login = 'Attempting login...';
-      setTestResults({...results});
-      
-      // Create a unique test user with timestamp
+      setTestResults({ ...results });
+
+      // === Test 3: User Registration & Login ===
       const timestamp = Date.now();
       const testUsername = `testuser_${timestamp}`;
-      const testEmail = `testuser_${timestamp}@example.com`;
-      const testPassword = 'Test@123';
-      
-      try {
-        // First register the new test user
-        const registerResponse = await fetch('http://localhost:8082/api/auth/signup', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: testUsername,
-            email: testEmail,
-            password: testPassword
-          })
-        });
+      const testEmail = `${testUsername}@example.com`;
+      const testPassword = "Test@123";
 
-        if (!registerResponse.ok) {
-          const error = await registerResponse.json();
-          throw new Error(`Registration failed: ${error.message || 'Unknown error'}`);
-        }
+      results.registration = "🔄 Registering test user...";
+      setTestResults({ ...results });
 
-        // Now login with the new user using username instead of email
-        const loginResponse = await fetch('http://localhost:8082/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: testUsername,  // Using username instead of email
-            password: testPassword
-          })
-        });
-
-        if (!loginResponse.ok) {
-          const error = await loginResponse.json();
-          throw new Error(`Login failed: ${error.message || 'Unknown error'}`);
-        }
-
-        const loginData = await loginResponse.json();
-        results.login = `✅ Login successful!`;
-        results.user = `👤 Username: ${loginData.username || 'Unknown'}`;
-        results.token = `🔑 Token: ${loginData.token ? 'Received' : 'Missing'}`;
-      } catch (loginErr) {
-        results.login = `❌ Login failed: ${loginErr.response?.data?.message || loginErr.message}`;
-        setTestResults({...results});
-        throw new Error(`Login failed: ${loginErr.response?.data?.message || loginErr.message}`);
-      }
-      setTestResults({...results});
-      
-      // Test 3: Get Current User (Skipped - Endpoint not implemented)
-      results.currentUser = '⏭️ Skipping user profile fetch (endpoint not implemented)';
-      setTestResults({...results});
-      
-      // Test 4: Get Posts (Skipped - Endpoint not implemented)
-      results.getPosts = '⏭️ Skipping posts fetch (endpoint not implemented)';
-      setTestResults({...results});
-      
-      // Add a note about successful authentication
-      results.note = '✅ Authentication flow is working correctly!';
-      results.note2 = 'Note: Some endpoints are not implemented yet.';
-      setTestResults({...results});
-      
-    } catch (err) {
-      console.error('API Test Error:', err);
-      setError(err.message || 'An error occurred during testing');
-      setTestResults({
-        ...results,
-        error: `❌ ${err.message}`
+      const registerRes = await fetch("http://localhost:8082/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: testUsername,
+          email: testEmail,
+          password: testPassword,
+        }),
       });
+
+      if (!registerRes.ok) {
+        const err = await registerRes.json();
+        throw new Error(
+          `Registration failed: ${err.message || "Unknown error"}`
+        );
+      }
+      results.registration = "✅ Test user registered";
+
+      results.login = "🔄 Logging in...";
+      setTestResults({ ...results });
+
+      const loginRes = await fetch("http://localhost:8082/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: testUsername,
+          password: testPassword,
+        }),
+      });
+
+      if (!loginRes.ok) {
+        const err = await loginRes.json();
+        throw new Error(`Login failed: ${err.message || "Unknown error"}`);
+      }
+
+      const loginData = await loginRes.json();
+      results.login = "✅ Login successful";
+      results.token = loginData.token
+        ? "🔑 Token received"
+        : "⚠️ Token missing";
+      results.user = `👤 ${loginData.username || testUsername}`;
+      setTestResults({ ...results });
+
+      // Skipped Tests (you can implement later)
+      results.getCurrentUser = "⏭️ Skipping user profile fetch";
+      results.getPosts = "⏭️ Skipping posts fetch";
+      results.summary = "🎉 API integration and auth are working!";
+    } catch (err) {
+      console.error("API Test Error:", err);
+      setError(err.message);
+      results.error = `❌ ${err.message}`;
+      setTestResults({ ...results });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <Text style={[styles.title, { color: themeColors.text }]}>API Integration Test</Text>
-      
+    <ScrollView
+      style={[styles.container, { backgroundColor: themeColors.background }]}
+    >
+      <Text style={[styles.title, { color: themeColors.text }]}>
+        API Integration Test
+      </Text>
+
       <View style={styles.buttonContainer}>
-        <Button 
-          title="Run API Tests" 
-          onPress={runApiTests} 
+        <Button
+          title="Run API Tests"
+          onPress={runApiTests}
           disabled={loading}
           color={themeColors.accent}
         />
       </View>
-      
-      {loading && <ActivityIndicator size="large" color={themeColors.accent} style={styles.loader} />}
-      
+
+      {loading && (
+        <ActivityIndicator
+          size="large"
+          color={themeColors.accent}
+          style={styles.loader}
+        />
+      )}
+
       <View style={styles.resultsContainer}>
-        <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Test Results:</Text>
-        {Object.entries(testResults).map(([test, result]) => (
-          <View key={test} style={styles.testRow}>
-            <Text style={[styles.testName, { color: themeColors.text }]}>{test}:</Text>
-            <Text style={[
-              styles.testResult, 
-              { color: result.includes('✅') ? 'green' : result.includes('❌') ? 'red' : themeColors.text }
-            ]}>
-              {result}
+        <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+          Test Results:
+        </Text>
+        {Object.entries(testResults).map(([key, value]) => (
+          <View key={key} style={styles.testRow}>
+            <Text style={[styles.testName, { color: themeColors.text }]}>
+              {key}:
+            </Text>
+            <Text
+              style={[
+                styles.testResult,
+                {
+                  color: value.includes("✅")
+                    ? "green"
+                    : value.includes("❌")
+                    ? "red"
+                    : themeColors.text,
+                },
+              ]}
+            >
+              {value}
             </Text>
           </View>
         ))}
       </View>
-      
+
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Error: {error}</Text>
@@ -182,9 +181,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   buttonContainer: {
     marginVertical: 20,
@@ -200,32 +199,32 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 15,
   },
   testRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 10,
     paddingVertical: 5,
   },
   testName: {
     flex: 1,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   testResult: {
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   errorContainer: {
     marginTop: 20,
     padding: 15,
-    backgroundColor: '#ffebee',
+    backgroundColor: "#ffebee",
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#f44336',
+    borderLeftColor: "#f44336",
   },
   errorText: {
-    color: '#d32f2f',
+    color: "#d32f2f",
   },
 });

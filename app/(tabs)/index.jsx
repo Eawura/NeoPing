@@ -27,7 +27,7 @@ import PopupMenu from "../../components/PopupMenu";
 import { usePosts } from "../../components/PostContext";
 import ProfileModal from "../../components/ProfileModal";
 import { useTheme } from "../../components/ThemeContext";
-import { getRelativeTime } from "../../utils/timeUtils";
+import { getRelativeTime } from "../utils/timeUtils";
 
 // Image mapping for profile pictures and post images
 const imageMap = {

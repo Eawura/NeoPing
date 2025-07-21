@@ -20,7 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { updateCurrentUserProfile } from "../services/userService";
+import { updateCurrentUserProfile } from "../app/services/userService";
 import { useBookmarks } from "./BookmarkContext";
 import { usePosts } from "./PostContext";
 import { useProfile } from "./ProfileContext";
@@ -230,20 +230,26 @@ export default function ProfileModal({
 
   const handleSaveProfile = async () => {
     try {
-      console.log('Starting profile save...');
+      console.log("Starting profile save...");
       setIsSaving(true);
-      
+
       const newProfileData = {
         username: editUsername,
         bio: editBio,
         avatar: avatarUri,
       };
-      
-      console.log('Sending profile update:', JSON.stringify(newProfileData, null, 2));
+
+      console.log(
+        "Sending profile update:",
+        JSON.stringify(newProfileData, null, 2)
+      );
 
       // Save to backend
       const updatedProfile = await updateCurrentUserProfile(newProfileData);
-      console.log('Profile update response:', JSON.stringify(updatedProfile, null, 2));
+      console.log(
+        "Profile update response:",
+        JSON.stringify(updatedProfile, null, 2)
+      );
 
       // Update local state with the response from the server
       setProfile((prevProfile) => {
@@ -251,36 +257,37 @@ export default function ProfileModal({
           ...prevProfile,
           ...updatedProfile,
         };
-        console.log('Updated profile state:', updated);
+        console.log("Updated profile state:", updated);
         return updated;
       });
 
       setShowProfileDetails(false);
-      console.log('Profile update successful, showing success message');
-      
+      console.log("Profile update successful, showing success message");
+
       // Show success message with a delay to ensure UI updates
       setTimeout(() => {
         Alert.alert(
-          "Success", 
+          "Success",
           "Profile updated successfully!",
           [
-            { 
+            {
               text: "OK",
-              onPress: () => console.log('User acknowledged success message')
-            }
+              onPress: () => console.log("User acknowledged success message"),
+            },
           ],
           { cancelable: false }
         );
       }, 100);
     } catch (error) {
       console.error("Error updating profile:", error);
-      
+
       // More detailed error message
-      const errorMessage = error.response?.data?.message || 
-                         error.message || 
-                         'Failed to update profile. Please try again.';
-      
-      console.error('Error details:', {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to update profile. Please try again.";
+
+      console.error("Error details:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
@@ -288,24 +295,24 @@ export default function ProfileModal({
           url: error.config?.url,
           method: error.config?.method,
           headers: error.config?.headers,
-          data: error.config?.data
-        }
+          data: error.config?.data,
+        },
       });
-      
+
       Alert.alert(
         "Error",
         errorMessage,
         [
-          { 
+          {
             text: "OK",
-            onPress: () => console.log('User acknowledged error')
-          }
+            onPress: () => console.log("User acknowledged error"),
+          },
         ],
         { cancelable: false }
       );
     } finally {
       setIsSaving(false);
-      console.log('Profile save operation completed');
+      console.log("Profile save operation completed");
     }
   };
 

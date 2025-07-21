@@ -12,7 +12,7 @@ import PopupMenu from '../../components/PopupMenu';
 import { usePosts } from '../../components/PostContext';
 import ProfileModal from '../../components/ProfileModal';
 import { useTheme } from '../../components/ThemeContext';
-import { getRelativeTime } from '../../utils/timeUtils';
+import { getRelativeTime } from '../utils/timeUtils';
 import popularData from './popular_data.json';
 
 

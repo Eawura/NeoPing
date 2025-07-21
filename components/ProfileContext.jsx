@@ -1,12 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getCurrentUser } from '../services/authService';
-import { isAuthenticated } from '../services/authService';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { getCurrentUser, isAuthenticated } from "../app/services/authService";
 
 const defaultProfile = {
-  username: 'u/User',
-  email: '',
-  bio: 'This is my bio.',
-  avatar: 'commenter1.jpg', // default avatar key matching imageMap
+  username: "u/User",
+  email: "",
+  bio: "This is my bio.",
+  avatar: "commenter1.jpg", // default avatar key matching imageMap
 };
 
 const ProfileContext = createContext({
@@ -24,41 +23,46 @@ export function ProfileProvider({ children }) {
 
   const fetchProfile = async () => {
     try {
-      console.log('[ProfileContext] Fetching profile...');
+      console.log("[ProfileContext] Fetching profile...");
       setLoading(true);
       setError(null);
-      
+
       // Check authentication status
       const authenticated = await isAuthenticated();
-      console.log('[ProfileContext] Authentication status:', authenticated);
-      
+      console.log("[ProfileContext] Authentication status:", authenticated);
+
       if (!authenticated) {
-        console.log('[ProfileContext] User not authenticated, skipping profile fetch');
+        console.log(
+          "[ProfileContext] User not authenticated, skipping profile fetch"
+        );
         setLoading(false);
         return;
       }
-      
+
       // Verify token is available
-      const token = await storage.getItem('auth_token');
-      console.log('[ProfileContext] Auth token available:', token ? 'Yes' : 'No');
-      
-      console.log('[ProfileContext] Fetching current user data...');
+      const token = await storage.getItem("auth_token");
+      console.log(
+        "[ProfileContext] Auth token available:",
+        token ? "Yes" : "No"
+      );
+
+      console.log("[ProfileContext] Fetching current user data...");
       const userData = await getCurrentUser();
-      console.log('[ProfileContext] Received user data:', userData);
-      
+      console.log("[ProfileContext] Received user data:", userData);
+
       const updatedProfile = {
         ...defaultProfile,
         ...userData,
         // Map backend fields to frontend fields if needed
         username: userData.username || defaultProfile.username,
-        email: userData.email || '',
+        email: userData.email || "",
       };
-      
-      console.log('[ProfileContext] Updating profile with:', updatedProfile);
+
+      console.log("[ProfileContext] Updating profile with:", updatedProfile);
       setProfile(updatedProfile);
     } catch (err) {
-      console.error('Failed to fetch user profile:', err);
-      setError(err.message || 'Failed to load profile');
+      console.error("Failed to fetch user profile:", err);
+      setError(err.message || "Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -70,13 +74,15 @@ export function ProfileProvider({ children }) {
   }, []);
 
   return (
-    <ProfileContext.Provider value={{ 
-      profile, 
-      setProfile, 
-      loading, 
-      error,
-      refreshProfile: fetchProfile,
-    }}>
+    <ProfileContext.Provider
+      value={{
+        profile,
+        setProfile,
+        loading,
+        error,
+        refreshProfile: fetchProfile,
+      }}
+    >
       {children}
     </ProfileContext.Provider>
   );

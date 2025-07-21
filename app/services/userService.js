@@ -1,4 +1,4 @@
-import api from '../utils/api';
+import api from "../utils/api";
 
 /**
  * Get current user's profile
@@ -6,10 +6,10 @@ import api from '../utils/api';
  */
 export const getCurrentUserProfile = async () => {
   try {
-    const response = await api.get('/auth/me');
+    const response = await api.get("/auth/me");
     return response.data;
   } catch (error) {
-    console.error('Error fetching current user profile:', error);
+    console.error("Error fetching current user profile:", error);
     throw error.response?.data || error.message;
   }
 };
@@ -21,10 +21,10 @@ export const getCurrentUserProfile = async () => {
  */
 export const updateCurrentUserProfile = async (profileData) => {
   try {
-    const response = await api.put('/auth/me', profileData);
+    const response = await api.put("/auth/me", profileData);
     return response.data;
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    console.error("Error updating user profile:", error);
     throw error.response?.data || error.message;
   }
 };
@@ -68,14 +68,18 @@ export const updateUserProfile = async (userId, userData) => {
  */
 export const uploadProfilePicture = async (userId, imageData) => {
   try {
-    const response = await api.post(`/users/${userId}/profile-picture`, imageData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post(
+      `/users/${userId}/profile-picture`,
+      imageData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
     return response.data;
   } catch (error) {
-    console.error('Error uploading profile picture:', error);
+    console.error("Error uploading profile picture:", error);
     throw error.response?.data || error.message;
   }
 };

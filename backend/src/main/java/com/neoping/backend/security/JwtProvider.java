@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class JwtProvider {
 
     private KeyStore keyStore;
-    
+
     @Value("${jwt.expiration.time}")
     private Long jwtExpirationInMillis;
 
@@ -39,8 +39,13 @@ public class JwtProvider {
     public void init() {
         try {
             keyStore = KeyStore.getInstance("JKS");
-            InputStream resourceStream = getClass().getResourceAsStream("/springblog.jks");
-            keyStore.load(resourceStream, "secret".toCharArray());
+            // ✅ Fixed: Use keystore.jks instead of springblog.jks
+            InputStream resourceStream = getClass().getResourceAsStream("/keystore.jks");
+            if (resourceStream == null) {
+                throw new SpringRedditException("Keystore file not found in resources");
+            }
+            // ✅ Fixed: Use springblog password instead of secret
+            keyStore.load(resourceStream, "springblog".toCharArray());
         } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | java.io.IOException e) {
             throw new SpringRedditException("Failed to initialize keystore", e);
         }
@@ -49,29 +54,29 @@ public class JwtProvider {
     public String generateToken(Authentication authentication) {
         String username = authentication.getName();
         return Jwts.builder()
-            .setSubject(username)
-            .setIssuedAt(new Date())
-            .setExpiration(Date.from(Instant.now().plusMillis(jwtExpirationInMillis)))
-            .signWith(getPrivateKey(), SignatureAlgorithm.RS256)
-            .compact();
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(Date.from(Instant.now().plusMillis(jwtExpirationInMillis)))
+                .signWith(getPrivateKey(), SignatureAlgorithm.RS256)
+                .compact();
     }
 
     public String generateRefreshToken(Authentication authentication) {
         String username = authentication.getName();
         return Jwts.builder()
-            .setSubject(username)
-            .setIssuedAt(new Date())
-            .setExpiration(Date.from(Instant.now().plusMillis(jwtRefreshExpirationInMillis)))
-            .signWith(getPrivateKey(), SignatureAlgorithm.RS256)
-            .compact();
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(Date.from(Instant.now().plusMillis(jwtRefreshExpirationInMillis)))
+                .signWith(getPrivateKey(), SignatureAlgorithm.RS256)
+                .compact();
     }
 
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()
-                .setSigningKey(getPublicKey())
-                .build()
-                .parseClaimsJws(token);
+                    .setSigningKey(getPublicKey())
+                    .build()
+                    .parseClaimsJws(token);
             return true;
         } catch (Exception e) {
             return false;
@@ -81,10 +86,10 @@ public class JwtProvider {
     public boolean validateRefreshToken(String refreshToken) {
         try {
             Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getPublicKey())
-                .build()
-                .parseClaimsJws(refreshToken)
-                .getBody();
+                    .setSigningKey(getPublicKey())
+                    .build()
+                    .parseClaimsJws(refreshToken)
+                    .getBody();
 
             Date expiration = claims.getExpiration();
             if (expiration.before(new Date())) {
@@ -100,10 +105,10 @@ public class JwtProvider {
 
     public String getUsernameFromJwt(String token) {
         Claims claims = Jwts.parserBuilder()
-            .setSigningKey(getPublicKey())
-            .build()
-            .parseClaimsJws(token)
-            .getBody();
+                .setSigningKey(getPublicKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
         return claims.getSubject();
     }
 
@@ -113,7 +118,8 @@ public class JwtProvider {
 
     private PrivateKey getPrivateKey() {
         try {
-            return (PrivateKey) keyStore.getKey("springblog", "password".toCharArray());
+            // ✅ Fixed: Use springblog password instead of password
+            return (PrivateKey) keyStore.getKey("springblog", "springblog".toCharArray());
         } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
             throw new SpringRedditException("Failed to retrieve private key", e);
         }
