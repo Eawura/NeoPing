@@ -2,15 +2,18 @@ import { AntDesign, FontAwesome } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter } from "expo-router"; // ← ADD THIS LINE
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Image,
+  Dimensions,
+  Image, // ← ADD THIS
+  KeyboardAvoidingView, // ← ADD THIS
   Linking,
   Modal,
-  Platform,
+  Platform, // ← ADD THIS
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,8 +21,20 @@ import {
   View,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import GoogleG from "../../assets/images/google-g.png";
 import { authAPI } from "../utils/api";
+
+// Get screen dimensions for responsive design
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const isWeb = Platform.OS === "web";
+const isMobile = Platform.OS !== "web";
+const GoogleG = require("../../assets/images/google-g.png");
+// Responsive scaling
+const scale = (size) => {
+  if (isWeb) {
+    return Math.min(size * (screenWidth / 400), size * 1.2);
+  }
+  return size * (screenWidth / 375); // Base iPhone width
+};
 
 const ACCENT = "#2E45A3";
 const GRADIENT = ["#e8edfa", "#c7d2f7", "#e8edfa"];
@@ -509,27 +524,28 @@ export default function AuthScreen() {
                 style={styles.modalLogo}
               />
             </View>
-            {/* Modal Title */}
-            <MaskedView
-              maskElement={
-                <Text style={styles.modalTitleGradient}>Log in to Neoping</Text>
-              }
-            >
-              <LinearGradient
-                colors={[ACCENT, "#7683F7", "#292F4B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  height: 36,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+            {/* Modal Title - FIXED GRADIENT */}
+            <View style={styles.modalTitleContainer}>
+              <MaskedView
+                style={styles.modalTitleMask}
+                maskElement={
+                  <Text style={styles.modalTitleGradient}>
+                    Log in to Neoping
+                  </Text>
+                }
               >
-                <Text style={[styles.modalTitleGradient, { opacity: 0 }]}>
-                  Log in to Neoping
-                </Text>
-              </LinearGradient>
-            </MaskedView>
+                <LinearGradient
+                  colors={[ACCENT, "#7683F7", "#292F4B"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.modalTitleGradientBackground}
+                >
+                  <Text style={[styles.modalTitleGradient, { opacity: 0 }]}>
+                    Log in to Neoping
+                  </Text>
+                </LinearGradient>
+              </MaskedView>
+            </View>{" "}
             {/* Email/Username Input */}
             <Animated.View
               style={{ width: "100%", transform: [{ translateX: shakeAnim }] }}
@@ -1388,7 +1404,7 @@ export default function AuthScreen() {
         </View>
       </Modal>
 
-      {/* Create Account Modal */}
+      {/* Create Account Modal - ENHANCED WITH SCROLLVIEW */}
       <Modal
         visible={createAccountModalVisible}
         animationType="slide"
@@ -1398,277 +1414,677 @@ export default function AuthScreen() {
           setModalVisible(true);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.createAccountCard}>
-            {/* Top Row: Back/Close */}
-            <View style={styles.forgotTopRow}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <View style={styles.createAccountCardWrapper}>
+            {/* Back Arrow - FIXED POSITION */}
+            <View style={styles.backArrowFixed}>
               <TouchableOpacity
+                style={styles.backArrowButton}
+                onPress={() => {
+                  setCreateAccountModalVisible(false);
+                  setModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <FontAwesome name="arrow-left" size={20} color="#333" />
+              </TouchableOpacity>
+              <Text style={styles.backArrowText}>Back to Login</Text>
+            </View>
+
+            {/* SCROLLABLE CONTENT */}
+            <ScrollView
+              style={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContentContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+            >
+              {/* Logo */}
+              <View style={styles.modalLogoWrapScroll}>
+                <Image
+                  source={require("../../assets/images/Penguin.jpg")}
+                  style={styles.modalLogoScroll}
+                />
+              </View>
+
+              {/* Gradient Title */}
+              <MaskedView
+                maskElement={
+                  <Text style={styles.createAccountTitleGradientScroll}>
+                    Hi new friend, welcome to Neoping
+                  </Text>
+                }
+              >
+                <LinearGradient
+                  colors={[ACCENT, "#7683F7", "#292F4B"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.titleGradientContainer}
+                >
+                  <Text
+                    style={[
+                      styles.createAccountTitleGradientScroll,
+                      { opacity: 0 },
+                    ]}
+                  >
+                    Hi new friend, welcome to Neoping
+                  </Text>
+                </LinearGradient>
+              </MaskedView>
+
+              {/* Subtitle */}
+              <Text style={styles.createAccountSubtitleScroll}>
+                Create your account to get started
+              </Text>
+
+              {/* Email Input */}
+              <View style={styles.inputWithLabelScroll}>
+                <Text style={styles.inputLabelScroll}>Email</Text>
+                <TextInput
+                  style={[
+                    styles.modalInputScroll,
+                    createError && styles.inputError,
+                  ]}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#888"
+                  value={createEmail}
+                  onChangeText={(text) => {
+                    setCreateEmail(text);
+                    setCreateError("");
+                    setCreateSuccess("");
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              {/* Username Input */}
+              <View style={styles.inputWithLabelScroll}>
+                <Text style={styles.inputLabelScroll}>Username</Text>
+                <TextInput
+                  style={[
+                    styles.modalInputScroll,
+                    createError && styles.inputError,
+                  ]}
+                  placeholder="Choose a username"
+                  placeholderTextColor="#888"
+                  value={createUsername}
+                  onChangeText={(text) => {
+                    setCreateUsername(text);
+                    setCreateError("");
+                    setCreateSuccess("");
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              {/* Password Input */}
+              <View style={styles.inputWithLabelScroll}>
+                <Text style={styles.inputLabelScroll}>Password</Text>
+                <View style={styles.passwordInputWrapScroll}>
+                  <TextInput
+                    style={styles.passwordInputScroll}
+                    placeholder="Create a password"
+                    placeholderTextColor="#888"
+                    value={createPassword}
+                    onChangeText={(text) => {
+                      setCreatePassword(text);
+                      setCreateError("");
+                      setCreateSuccess("");
+                    }}
+                    secureTextEntry={!createPasswordVisible}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIconWrapScroll}
+                    onPress={() => setCreatePasswordVisible((v) => !v)}
+                  >
+                    <FontAwesome
+                      name={createPasswordVisible ? "eye" : "eye-slash"}
+                      size={20}
+                      color="#888"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={styles.inputWithLabelScroll}>
+                <Text style={styles.inputLabelScroll}>Confirm Password</Text>
+                <View style={styles.passwordInputWrapScroll}>
+                  <TextInput
+                    style={styles.passwordInputScroll}
+                    placeholder="Confirm your password"
+                    placeholderTextColor="#888"
+                    value={createConfirmPassword}
+                    onChangeText={(text) => {
+                      setCreateConfirmPassword(text);
+                      setCreateError("");
+                      setCreateSuccess("");
+                    }}
+                    secureTextEntry={!createConfirmPasswordVisible}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIconWrapScroll}
+                    onPress={() => setCreateConfirmPasswordVisible((v) => !v)}
+                  >
+                    <FontAwesome
+                      name={createConfirmPasswordVisible ? "eye" : "eye-slash"}
+                      size={20}
+                      color="#888"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Checkbox */}
+              <View style={styles.checkboxRowModernScroll}>
+                <TouchableOpacity
+                  onPress={() => setCreateChecked(!createChecked)}
+                  style={styles.checkboxBoxModern}
+                >
+                  {createChecked ? (
+                    <LinearGradient
+                      colors={[ACCENT, "#7683F7"]}
+                      style={styles.checkboxGradient}
+                    >
+                      <AntDesign name="check" size={16} color="#fff" />
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.checkboxEmpty} />
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.checkboxTextModernScroll}>
+                  I agree to receive emails about cool stuff on Neoping
+                </Text>
+              </View>
+
+              {/* Create Account Button */}
+              <TouchableOpacity
+                style={[
+                  styles.modalLoginBtnScroll,
+                  (!createEmail.trim() ||
+                    !createUsername.trim() ||
+                    !createPassword.trim() ||
+                    !createConfirmPassword.trim() ||
+                    !createChecked ||
+                    createLoading) &&
+                    styles.modalLoginBtnDisabled,
+                ]}
+                onPress={handleCreateAccount}
+                disabled={
+                  !createEmail.trim() ||
+                  !createUsername.trim() ||
+                  !createPassword.trim() ||
+                  !createConfirmPassword.trim() ||
+                  !createChecked ||
+                  createLoading
+                }
+              >
+                {createLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text
+                    style={[
+                      styles.modalLoginTextScroll,
+                      (!createEmail.trim() ||
+                        !createUsername.trim() ||
+                        !createPassword.trim() ||
+                        !createConfirmPassword.trim() ||
+                        !createChecked ||
+                        createLoading) &&
+                        styles.modalLoginTextDisabled,
+                    ]}
+                  >
+                    Create Account
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Error/Success Messages */}
+              {createError ? (
+                <Text style={styles.errorTextModernScroll}>{createError}</Text>
+              ) : null}
+              {createSuccess ? (
+                <Text style={styles.successTextModernScroll}>
+                  {createSuccess}
+                </Text>
+              ) : null}
+
+              {/* Legal Text */}
+              <Text style={styles.legalTextModernScroll}>
+                By continuing, you agree to our{" "}
+                <Text
+                  style={styles.linkModern}
+                  onPress={() =>
+                    Linking.openURL("https://your-user-agreement-url.com")
+                  }
+                >
+                  User Agreement
+                </Text>{" "}
+                and acknowledge that you understand the{" "}
+                <Text
+                  style={styles.linkModern}
+                  onPress={() =>
+                    Linking.openURL("https://your-privacy-policy-url.com")
+                  }
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+
+              {/* Login Link */}
+              <TouchableOpacity
+                style={styles.createAccountLoginBtnScroll}
                 onPress={() => {
                   setCreateAccountModalVisible(false);
                   setModalVisible(true);
                 }}
               >
-                <FontAwesome name="arrow-left" size={22} color="#222" />
+                <Text style={styles.createAccountLoginTextScroll}>
+                  Log into existing account
+                </Text>
               </TouchableOpacity>
-              <View style={{ width: 22 }} />
-            </View>
 
-            {/* Logo */}
-            <View style={styles.modalLogoWrap}>
-              <Image
-                source={require("../../assets/images/Penguin.jpg")}
-                style={styles.modalLogo}
-              />
-            </View>
-
-            {/* Gradient Title */}
-            <MaskedView
-              maskElement={
-                <Text style={styles.createAccountTitleGradient}>
-                  Hi new friend, welcome to Neoping
-                </Text>
-              }
-            >
-              <LinearGradient
-                colors={[ACCENT, "#7683F7", "#292F4B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  height: 36,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text
-                  style={[styles.createAccountTitleGradient, { opacity: 0 }]}
-                >
-                  Hi new friend, welcome to Neoping
-                </Text>
-              </LinearGradient>
-            </MaskedView>
-
-            {/* Updated Subtitle */}
-            <Text style={styles.createAccountSubtitle}>
-              Create your account to get started
-            </Text>
-
-            {/* Email Input with Label */}
-            <View style={styles.inputWithLabel}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={[styles.modalInput, createError && styles.inputError]}
-                placeholder="Enter your email"
-                placeholderTextColor="#888"
-                value={createEmail}
-                onChangeText={(text) => {
-                  setCreateEmail(text);
-                  setCreateError("");
-                  setCreateSuccess("");
-                }}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
-
-            {/* Username Input with Label */}
-            <View style={styles.inputWithLabel}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <TextInput
-                style={[styles.modalInput, createError && styles.inputError]}
-                placeholder="Choose a username"
-                placeholderTextColor="#888"
-                value={createUsername}
-                onChangeText={(text) => {
-                  setCreateUsername(text);
-                  setCreateError("");
-                  setCreateSuccess("");
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            {/* Password Input with Label */}
-            <View style={styles.inputWithLabel}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.passwordInputWrap}>
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    { flex: 1, marginBottom: 0 },
-                    createError && styles.inputError,
-                  ]}
-                  placeholder="Create a password"
-                  placeholderTextColor="#888"
-                  value={createPassword}
-                  onChangeText={(text) => {
-                    setCreatePassword(text);
-                    setCreateError("");
-                    setCreateSuccess("");
-                  }}
-                  secureTextEntry={!createPasswordVisible}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIconWrap}
-                  onPress={() => setCreatePasswordVisible((v) => !v)}
-                >
-                  <FontAwesome
-                    name={createPasswordVisible ? "eye" : "eye-slash"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Confirm Password Input with Label */}
-            <View style={styles.inputWithLabel}>
-              <Text style={styles.inputLabel}>Confirm Password</Text>
-              <View style={styles.passwordInputWrap}>
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    { flex: 1, marginBottom: 0 },
-                    createError && styles.inputError,
-                  ]}
-                  placeholder="Confirm your password"
-                  placeholderTextColor="#888"
-                  value={createConfirmPassword}
-                  onChangeText={(text) => {
-                    setCreateConfirmPassword(text);
-                    setCreateError("");
-                    setCreateSuccess("");
-                  }}
-                  secureTextEntry={!createConfirmPasswordVisible}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIconWrap}
-                  onPress={() => setCreateConfirmPasswordVisible((v) => !v)}
-                >
-                  <FontAwesome
-                    name={createConfirmPasswordVisible ? "eye" : "eye-slash"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Checkbox */}
-            <View style={styles.checkboxRowModern}>
-              <TouchableOpacity
-                onPress={() => setCreateChecked(!createChecked)}
-                style={styles.checkboxBoxModern}
-              >
-                {createChecked ? (
-                  <LinearGradient
-                    colors={[ACCENT, "#7683F7"]}
-                    style={styles.checkboxGradient}
-                  >
-                    <AntDesign name="check" size={16} color="#fff" />
-                  </LinearGradient>
-                ) : (
-                  <View style={styles.checkboxEmpty} />
-                )}
-              </TouchableOpacity>
-              <Text style={styles.checkboxTextModern}>
-                I agree to receive emails about cool stuff on Neoping
-              </Text>
-            </View>
-
-            {/* Create Account Button */}
-            <TouchableOpacity
-              style={[
-                styles.modalLoginBtn,
-                (!createEmail.trim() ||
-                  !createUsername.trim() ||
-                  !createPassword.trim() ||
-                  !createConfirmPassword.trim() ||
-                  !createChecked ||
-                  createLoading) &&
-                  styles.modalLoginBtnDisabled,
-              ]}
-              onPress={handleCreateAccount}
-              disabled={
-                !createEmail.trim() ||
-                !createUsername.trim() ||
-                !createPassword.trim() ||
-                !createConfirmPassword.trim() ||
-                !createChecked ||
-                createLoading
-              }
-            >
-              {createLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text
-                  style={[
-                    styles.modalLoginText,
-                    (!createEmail.trim() ||
-                      !createUsername.trim() ||
-                      !createPassword.trim() ||
-                      !createConfirmPassword.trim() ||
-                      !createChecked ||
-                      createLoading) &&
-                      styles.modalLoginTextDisabled,
-                  ]}
-                >
-                  Create Account
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Error/Success Message */}
-            {createError ? (
-              <Text style={styles.errorTextModern}>{createError}</Text>
-            ) : null}
-            {createSuccess ? (
-              <Text style={styles.successTextModern}>{createSuccess}</Text>
-            ) : null}
-
-            {/* Legal Text */}
-            <Text style={styles.legalTextModern}>
-              By continuing, you agree to our{" "}
-              <Text
-                style={styles.linkModern}
-                onPress={() =>
-                  Linking.openURL("https://your-user-agreement-url.com")
-                }
-              >
-                User Agreement
-              </Text>{" "}
-              and acknowledge that you understand the{" "}
-              <Text
-                style={styles.linkModern}
-                onPress={() =>
-                  Linking.openURL("https://your-privacy-policy-url.com")
-                }
-              >
-                Privacy Policy
-              </Text>
-              .
-            </Text>
-
-            {/* Log into existing account link */}
-            <TouchableOpacity
-              style={styles.createAccountLoginBtn}
-              onPress={() => {
-                setCreateAccountModalVisible(false);
-                setModalVisible(true);
-              }}
-            >
-              <Text style={styles.createAccountLoginText}>
-                Log into existing account
-              </Text>
-            </TouchableOpacity>
+              {/* Bottom Padding for Scroll */}
+              <View style={{ height: 40 }} />
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  // Existing styles
+  gradient: {
+    flex: 1,
+  },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // New responsive styles
+  // FIXED: Text visibility and sizing
+  modalTitleGradient: {
+    fontSize: Platform.select({
+      web: Math.max(28, scale(28)),
+      default: Math.max(24, scale(24)),
+    }),
+    fontWeight: "800",
+    textAlign: "center",
+    color: "transparent",
+    minHeight: Platform.select({
+      web: 40,
+      default: 36,
+    }),
+    lineHeight: Platform.select({
+      web: 40,
+      default: 32,
+    }),
+  },
+
+  // FIXED: Input labels always visible
+  inputLabel: {
+    fontSize: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+    marginLeft: 2,
+    minHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+    textAlignVertical: "center",
+  },
+
+  // FIXED: Input containers with proper spacing
+  inputWithLabel: {
+    width: "100%",
+    marginBottom: Platform.select({
+      web: 20,
+      default: 16,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 4,
+      default: 2,
+    }),
+  },
+
+  // FIXED: Modal input sizing
+  modalInput: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    paddingVertical: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    fontSize: Platform.select({
+      web: 16,
+      default: 15,
+    }),
+    color: "#333",
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+    marginBottom: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    minHeight: Platform.select({
+      web: 52,
+      default: 48,
+    }),
+    width: "100%",
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+  },
+
+  // FIXED: Modal cards with proper sizing
+  modalCard: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: Platform.select({
+      web: 32,
+      default: 24,
+    }),
+    paddingTop: Platform.select({
+      web: 32,
+      default: 24,
+    }),
+    paddingBottom: Platform.select({
+      web: 40,
+      default: 32,
+    }),
+    width: "100%",
+    maxWidth: Platform.select({
+      web: 480,
+      default: screenWidth,
+    }),
+    maxHeight: Platform.select({
+      web: screenHeight * 0.9,
+      default: screenHeight * 0.85,
+    }),
+    alignSelf: "center",
+  },
+
+  // FIXED: Create account card with scrolling
+  createAccountCard: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: Platform.select({
+      web: 32,
+      default: 20,
+    }),
+    paddingTop: Platform.select({
+      web: 32,
+      default: 24,
+    }),
+    paddingBottom: Platform.select({
+      web: 40,
+      default: Platform.OS === "ios" ? 34 : 24,
+    }),
+    width: "100%",
+    maxWidth: Platform.select({
+      web: 480,
+      default: screenWidth,
+    }),
+    maxHeight: Platform.select({
+      web: screenHeight * 0.9,
+      default: screenHeight * 0.9,
+    }),
+    alignSelf: "center",
+  },
+
+  // FIXED: Button text visibility
+  modalLoginText: {
+    color: "#fff",
+    fontSize: Platform.select({
+      web: 18,
+      default: 16,
+    }),
+    fontWeight: "700",
+    textAlign: "center",
+    minHeight: Platform.select({
+      web: 22,
+      default: 20,
+    }),
+    lineHeight: Platform.select({
+      web: 22,
+      default: 20,
+    }),
+  },
+
+  // FIXED: Error text visibility
+  errorTextModern: {
+    color: "#e74c3c",
+    fontSize: Platform.select({
+      web: 15,
+      default: 14,
+    }),
+    textAlign: "center",
+    marginTop: Platform.select({
+      web: 12,
+      default: 10,
+    }),
+    marginBottom: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 12,
+    }),
+    minHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+  },
+
+  // FIXED: Success text visibility
+  successTextModern: {
+    color: "#27ae60",
+    fontSize: Platform.select({
+      web: 15,
+      default: 14,
+    }),
+    textAlign: "center",
+    marginTop: Platform.select({
+      web: 12,
+      default: 10,
+    }),
+    marginBottom: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 12,
+    }),
+    minHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+  },
+
+  // FIXED: Checkbox text
+  checkboxTextModern: {
+    fontSize: Platform.select({
+      web: 15,
+      default: 14,
+    }),
+    color: "#666",
+    marginLeft: Platform.select({
+      web: 12,
+      default: 10,
+    }),
+    flex: 1,
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+    textAlignVertical: "center",
+  },
+
+  // FIXED: Legal text
+  legalTextModern: {
+    fontSize: Platform.select({
+      web: 13,
+      default: 12,
+    }),
+    color: "#888",
+    textAlign: "center",
+    lineHeight: Platform.select({
+      web: 18,
+      default: 16,
+    }),
+    marginTop: Platform.select({
+      web: 20,
+      default: 16,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 8,
+    }),
+  },
+
+  // FIXED: Password input wrapper
+  passwordInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+    marginBottom: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    minHeight: Platform.select({
+      web: 52,
+      default: 48,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+  },
+
+  // FIXED: Eye icon positioning
+  eyeIconWrap: {
+    padding: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+    marginLeft: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+  },
+
+  // FIXED: Modal overlay for better centering
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: Platform.select({
+      web: "center",
+      default: "flex-end",
+    }),
+    alignItems: "center",
+    paddingHorizontal: Platform.select({
+      web: 20,
+      default: 0,
+    }),
+  },
+
+  // FIXED: Top row spacing
+  forgotTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: Platform.select({
+      web: 24,
+      default: 20,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 4,
+      default: 2,
+    }),
+    minHeight: Platform.select({
+      web: 32,
+      default: 28,
+    }),
+  },
+
+  // FIXED: Subtitle text
+  createAccountSubtitle: {
+    fontSize: Platform.select({
+      web: 17,
+      default: 15,
+    }),
+    color: "#666",
+    textAlign: "center",
+    lineHeight: Platform.select({
+      web: 24,
+      default: 22,
+    }),
+    marginBottom: Platform.select({
+      web: 28,
+      default: 24,
+    }),
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 8,
+    }),
+  },
+
+  // Keep existing styles that aren't being replaced
+  cardModern: {
+    width: "92%",
+    backgroundColor: "rgba(255,255,255,0.90)",
+    borderRadius: 44,
+    paddingVertical: 56,
+    paddingHorizontal: 30,
+    alignItems: "center",
+    shadowColor: "#2E45A3",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.16,
+    shadowRadius: 40,
+    elevation: 20,
+    marginVertical: 32,
+    ...(Platform.OS === "web" ? { backdropFilter: "blur(16px)" } : {}),
+  },
+  // ... (other existing styles will be preserved)
   gradient: {
     flex: 1,
   },
@@ -2531,5 +2947,431 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 8,
     marginLeft: 4,
+  },
+  // Add these to your StyleSheet.create({ ... }) at the bottom:
+
+  // Enhanced create account title
+  createAccountTitleGradient: {
+    fontSize: Platform.select({
+      web: Math.max(28, scale(28)),
+      default: Math.max(24, scale(24)),
+    }),
+    fontWeight: "800",
+    textAlign: "center",
+    color: "transparent",
+    minHeight: Platform.select({
+      web: 40,
+      default: 36,
+    }),
+    lineHeight: Platform.select({
+      web: 40,
+      default: 32,
+    }),
+  },
+
+  // Enhanced modal logo
+  modalLogo: {
+    width: Platform.select({
+      web: 80,
+      default: 70,
+    }),
+    height: Platform.select({
+      web: 80,
+      default: 70,
+    }),
+    borderRadius: Platform.select({
+      web: 40,
+      default: 35,
+    }),
+    borderWidth: 3,
+    borderColor: "#fff",
+    backgroundColor: "#e8edfa",
+    shadowColor: "#2E45A3",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+
+  // Enhanced username specific styles
+  usernameInputLabel: {
+    fontSize: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+    marginLeft: 2,
+    minHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+  },
+
+  usernameInputWrap: {
+    width: "100%",
+    marginBottom: Platform.select({
+      web: 18,
+      default: 14,
+    }),
+  },
+
+  usernameInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+    paddingHorizontal: Platform.select({
+      web: 16,
+      default: 14,
+    }),
+    paddingVertical: Platform.select({
+      web: 14,
+      default: 12,
+    }),
+    minHeight: Platform.select({
+      web: 50,
+      default: 46,
+    }),
+  },
+
+  usernameInput: {
+    flex: 1,
+    fontSize: Platform.select({
+      web: 16,
+      default: 15,
+    }),
+    color: "#333",
+    minHeight: Platform.select({
+      web: 22,
+      default: 20,
+    }),
+    lineHeight: Platform.select({
+      web: 22,
+      default: 20,
+    }),
+    textAlignVertical: "center",
+  },
+
+  // Username error text
+  usernameErrorText: {
+    color: "#e74c3c",
+    fontSize: Platform.select({
+      web: 14,
+      default: 13,
+    }),
+    marginTop: 4,
+    marginBottom: 8,
+    textAlign: "left",
+    fontWeight: "500",
+    alignSelf: "flex-start",
+    marginLeft: 6,
+    lineHeight: Platform.select({
+      web: 18,
+      default: 16,
+    }),
+  },
+
+  // Enhanced link modern style
+  linkModern: {
+    color: ACCENT,
+    textDecorationLine: "underline",
+    fontWeight: "bold",
+  },
+
+  // Enhanced create account login button
+  createAccountLoginBtn: {
+    marginTop: Platform.select({
+      web: 20,
+      default: 16,
+    }),
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: Platform.select({
+      web: 12,
+      default: 10,
+    }),
+  },
+
+  createAccountLoginText: {
+    color: ACCENT,
+    fontSize: Platform.select({
+      web: 16,
+      default: 15,
+    }),
+    fontWeight: "700",
+    textDecorationLine: "underline",
+    lineHeight: Platform.select({
+      web: 20,
+      default: 18,
+    }),
+  },
+  // Add these to your StyleSheet.create({ ... }):
+
+  // SCROLL-OPTIMIZED STYLES
+  createAccountCardWrapper: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    width: "100%",
+    maxWidth: Platform.select({
+      web: 480,
+      default: screenWidth,
+    }),
+    maxHeight: Platform.select({
+      web: screenHeight * 0.95,
+      default: screenHeight * 0.9,
+    }),
+    alignSelf: "center",
+    flex: 1,
+    marginTop: Platform.select({
+      web: 20,
+      default: 50,
+    }),
+  },
+
+  backArrowFixed: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 10,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+
+  backArrowButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: "rgba(46, 69, 163, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(46, 69, 163, 0.2)",
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+
+  backArrowText: {
+    fontSize: 16,
+    color: "#666",
+    marginLeft: 12,
+    fontWeight: "600",
+  },
+
+  scrollContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+
+  scrollContentContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 30,
+  },
+
+  modalLogoWrapScroll: {
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10,
+  },
+
+  modalLogoScroll: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: "#fff",
+    backgroundColor: "#e8edfa",
+    shadowColor: "#2E45A3",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+
+  createAccountTitleGradientScroll: {
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+    color: "transparent",
+    lineHeight: 28,
+  },
+
+  titleGradientContainer: {
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+
+  createAccountSubtitleScroll: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+
+  inputWithLabelScroll: {
+    width: "100%",
+    marginBottom: 16,
+  },
+
+  inputLabelScroll: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+
+  modalInputScroll: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: "#333",
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+    minHeight: 48,
+    width: "100%",
+  },
+
+  passwordInputWrapScroll: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+    minHeight: 48,
+    paddingHorizontal: 16,
+  },
+
+  passwordInputScroll: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    paddingVertical: 14,
+  },
+
+  eyeIconWrapScroll: {
+    padding: 8,
+    marginLeft: 8,
+  },
+
+  checkboxRowModernScroll: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 8,
+    marginBottom: 16,
+    alignSelf: "flex-start",
+  },
+
+  checkboxTextModernScroll: {
+    fontSize: 14,
+    color: "#666",
+    marginLeft: 10,
+    flex: 1,
+    lineHeight: 18,
+  },
+
+  modalLoginBtnScroll: {
+    backgroundColor: ACCENT,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    marginTop: 8,
+    marginBottom: 16,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  modalLoginTextScroll: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  errorTextModernScroll: {
+    color: "#e74c3c",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+
+  successTextModernScroll: {
+    color: "#27ae60",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+
+  legalTextModernScroll: {
+    fontSize: 12,
+    color: "#888",
+    textAlign: "center",
+    lineHeight: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+
+  createAccountLoginBtnScroll: {
+    marginTop: 8,
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+
+  createAccountLoginTextScroll: {
+    color: ACCENT,
+    fontSize: 15,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  // Add these NEW styles to your StyleSheet.create({ ... }):
+
+  modalTitleContainer: {
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 24,
+    minHeight: 45,
+  },
+
+  modalTitleMask: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalTitleGradientBackground: {
+    width: "100%",
+    minHeight: 45,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
 });
