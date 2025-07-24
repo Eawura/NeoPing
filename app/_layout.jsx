@@ -1,22 +1,31 @@
-import { Stack } from 'expo-router';
+import { Slot, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
+import { BookmarkProvider } from "../components/BookmarkContext";
+import { NewsProvider } from "../components/NewsContext";
+import { PostProvider } from "../components/PostContext";
+import { AppProvider } from "../components/ThemeContext";
+import { AuthProvider } from "../context/AuthContext";
+import { authAPI } from "./utils/api";
 
-const onlayout = () => {
-  // const [loaded] = useFonts({
-  //   MontserratItalic:require("../assets/fonts/Montserrat-Italic-VariableFont_wght.tff"),
-  //   Montserrat:require("../assets/fonts/Montserrat-VariableFont_wght.tff"),
-  // })
+export default function RootLayout() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const router = useRouter();
 
-  // useEffect(()=>{
-  //   if(loaded){
-  //     SplashScreen.hideAsync()
-  //   }
-  // },[loaded])
-
-  // if(!loaded){
-  //   return null;
-  // }
-
-  return <Stack screenOptions={{ headerShown: false }} />;
-};
-
-export default onlayout;
+  return (
+    <NewsProvider>
+      <AppProvider>
+        <BookmarkProvider>
+          <PostProvider>
+            <AuthProvider>
+              {" "}
+              {/* ✅ Add this wrapper */}
+              <Slot />
+            </AuthProvider>
+          </PostProvider>
+        </BookmarkProvider>
+      </AppProvider>
+    </NewsProvider>
+  );
+}

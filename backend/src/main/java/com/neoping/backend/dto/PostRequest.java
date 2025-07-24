@@ -8,16 +8,34 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PostRequest {
-    private String postName;
+    private String title;
     private String url;
     private String description;
+
+    // --- Extended fields for create.jsx compatibility ---
+    private String image; // image URL or filename
+    private String video; // video URL or filename
+    private String pollQuestion;
+    private String pollOptions; // JSON or comma-separated
+    private Integer pollDuration;
+    private String linkUrl;
+    private String linkTitle;
+    private String community; // community name or id
 
     @Override
     public String toString() {
         return "PostRequest{" +
-                "postName='" + postName + '\'' +
+                "title='" + title + '\'' +
                 ", url='" + url + '\'' +
                 ", description='" + description + '\'' +
+                ", image='" + image + '\'' +
+                ", video='" + video + '\'' +
+                ", pollQuestion='" + pollQuestion + '\'' +
+                ", pollOptions='" + pollOptions + '\'' +
+                ", pollDuration='" + pollDuration + '\'' +
+                ", linkUrl='" + linkUrl + '\'' +
+                ", linkTitle='" + linkTitle + '\'' +
+                ", community='" + community + '\'' +
                 '}';
     }
 

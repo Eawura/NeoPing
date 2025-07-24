@@ -12,15 +12,15 @@ import com.neoping.backend.service.VoteService;
 
 import lombok.AllArgsConstructor;
 
-@RestController 
+@RestController
 @RequestMapping("/api/votes")
 @AllArgsConstructor
 
 public class VoteController {
    private final VoteService voteService;
 
-   @PostMapping 
-   public ResponseEntity<Void> vote(@RequestBody VoteDto voteDto){
+   @PostMapping
+   public ResponseEntity<Void> vote(@RequestBody VoteDto voteDto) {
       voteService.vote(voteDto);
       return new ResponseEntity<>(HttpStatus.OK);
    }

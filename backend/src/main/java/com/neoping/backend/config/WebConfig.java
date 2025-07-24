@@ -13,7 +13,15 @@ public class WebConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:8081")
+                        .allowedOrigins(
+                                "http://localhost:8081",
+                                "http://localhost:8082",
+                                "http://192.168.100.6:8081", // Your IP
+                                "http://192.168.100.6:19000", // Expo dev server
+                                "http://192.168.100.6:19006", // Alternative Expo port
+                                "exp://192.168.100.6:8081", // Expo protocol
+                                "exp://192.168.100.6:19000" // Expo protocol alternative
+                )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);

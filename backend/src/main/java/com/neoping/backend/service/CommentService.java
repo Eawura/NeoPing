@@ -25,71 +25,130 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class CommentService {
 
-    private static final String POST_URL = "http://localhost:8082/api/posts/";
+        private static final String POST_URL = "http://localhost:8082/api/posts/";
 
-    private final PostRepository postRepository;
-    private final UserRepository userRepository;
-    private final CommentRepository commentRepository;
-    private final CommentMapper commentMapper;
-    private final MailContentBuilder mailContentBuilder;
-    private final MailService mailService;
+        private final PostRepository postRepository;
+        private final UserRepository userRepository;
+        private final CommentRepository commentRepository;
+        private final CommentMapper commentMapper;
+        private final MailContentBuilder mailContentBuilder;
+        private final MailService mailService;
 
-    public void save(CommentDto commentDto) {
-        Post post = postRepository.findById(commentDto.getPostId())
-                .orElseThrow(() -> new SpringRedditException("Post not found with id: " + commentDto.getPostId()));
+        public void save(CommentDto commentDto) {
+                Post post = postRepository.findById(commentDto.getPostId())
+                                .orElseThrow(() -> new SpringRedditException(
+                                                "Post not found with id: " + commentDto.getPostId()));
 
-        post.getUser().getUsername(); // Force load user
+                post.getUser().getUsername(); // Force load user
 
-        User user = userRepository.findByUsername(commentDto.getUserName())
-                .orElseThrow(() -> new SpringRedditException("User not found: " + commentDto.getUserName()));
+                User user = userRepository.findByUsername(commentDto.getUserName())
+                                .orElseThrow(() -> new SpringRedditException(
+                                                "User not found: " + commentDto.getUserName()));
 
-        Comment comment = commentMapper.map(commentDto, post, user);
-        comment.setCreatedAt(LocalDateTime.now());
+                Comment comment = commentMapper.map(commentDto, post, user);
+                comment.setCreatedAt(LocalDateTime.now());
 
-        // Handle nested comment
-        if (commentDto.getParentCommentId() != null) {
-            Comment parentComment = commentRepository.findById(commentDto.getParentCommentId())
-                    .orElseThrow(() -> new SpringRedditException("Parent comment not found with id: " + commentDto.getParentCommentId()));
-            comment.setParentComment(parentComment);
+                // Handle nested comment
+                if (commentDto.getParentCommentId() != null) {
+                        Comment parentComment = commentRepository.findById(commentDto.getParentCommentId())
+                                        .orElseThrow(() -> new SpringRedditException(
+                                                        "Parent comment not found with id: "
+                                                                        + commentDto.getParentCommentId()));
+                        comment.setParentComment(parentComment);
+                }
+
+                commentRepository.save(comment);
+
+                // Send notification if commenter is not post owner
+                if (!user.getUsername().equals(post.getUser().getUsername())) {
+                        String message = mailContentBuilder.build(user.getUsername() +
+                                        " commented on your post. View it here: " + POST_URL + post.getId());
+                        sendCommentNotification(post.getUser(), message);
+                }
         }
 
-        commentRepository.save(comment);
-
-        // Send notification if commenter is not post owner
-        if (!user.getUsername().equals(post.getUser().getUsername())) {
-            String message = mailContentBuilder.build(user.getUsername() +
-                    " commented on your post. View it here: " + POST_URL + post.getId());
-            sendCommentNotification(post.getUser(), message);
+        public List<CommentDto> getAllCommentsForPost(Long postId) {
+                // Use repository method that fetches by postId for reliability
+                List<Comment> comments;
+                try {
+                        comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
+                } catch (Exception e) {
+                        // Fallback to custom query if needed
+                        comments = commentRepository.findCommentsByPostId(postId);
+                }
+                if (comments == null) {
+                        return List.of();
+                }
+                // Map to DTOs, handle possible serialization issues
+                return comments.stream()
+                                .map(commentMapper::mapToDto)
+                                .collect(Collectors.toList());
         }
-    }
 
-    public List<CommentDto> getAllCommentsForPost(Long postId) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new SpringRedditException("Post not found with id " + postId));
+        public List<CommentDto> getAllCommentsForUser(String username) {
+                User user = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new SpringRedditException("User not found: " + username));
 
-        // Fetch only top-level comments
-        List<Comment> topLevelComments = commentRepository.findByPostAndParentCommentIsNull(post);
+                return commentRepository.findAllByUser(user).stream()
+                                .map(commentMapper::mapToDto)
+                                .collect(Collectors.toList());
+        }
 
-        // Map to DTO (assuming mapper can handle nested replies or you do it here)
-        return topLevelComments.stream()
-                .map(commentMapper::mapToDto)
-                .collect(Collectors.toList());
-    }
+        public List<Comment> getCommentsByPostId(Long postId) {
+                try {
+                        log.info("📖 Getting comments for post ID: {}", postId);
 
-    public List<CommentDto> getAllCommentsForUser(String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new SpringRedditException("User not found: " + username));
+                        // Try the direct method first, fallback to query if needed
+                        try {
+                                return commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
+                        } catch (Exception e) {
+                                log.warn("Direct method failed, trying query method: {}", e.getMessage());
+                                return commentRepository.findCommentsByPostId(postId);
+                        }
 
-        return commentRepository.findAllByUser(user).stream()
-                .map(commentMapper::mapToDto)
-                .collect(Collectors.toList());
-    }
+                } catch (Exception e) {
+                        log.error("❌ Error getting comments for post {}: {}", postId, e.getMessage());
+                        throw new RuntimeException("Failed to get comments", e);
+                }
+        }
 
-    private void sendCommentNotification(User user, String message) {
-        log.info("Sending comment email to: {}", user.getEmail());
-        mailService.sendMail(new NotificationEmail(
-                "Someone commented on your post",
-                user.getEmail(),
-                message));
-    }
+        public Comment addComment(Long postId, String content, String username) {
+                try {
+                        log.info("💬 Adding comment to post {} by user: {}", postId, username);
+
+                        // Find the post
+                        Post post = postRepository.findById(postId)
+                                        .orElseThrow(() -> new RuntimeException("Post not found with id: " + postId));
+
+                        // Find the user
+                        User user = userRepository.findByUsername(username)
+                                        .orElseThrow(() -> new RuntimeException(
+                                                        "User not found with username: " + username));
+
+                        // Create comment using your existing Comment entity
+                        Comment comment = Comment.builder()
+                                        .content(content)
+                                        .post(post)
+                                        .user(user)
+                                        .build();
+
+                        // Save using your existing repository
+                        Comment savedComment = commentRepository.save(comment);
+                        log.info("✅ Comment saved with ID: {}", savedComment.getId());
+
+                        return savedComment;
+
+                } catch (Exception e) {
+                        log.error("❌ Error adding comment: {}", e.getMessage());
+                        throw new RuntimeException("Failed to add comment", e);
+                }
+        }
+
+        private void sendCommentNotification(User user, String message) {
+                log.info("Sending comment email to: {}", user.getEmail());
+                mailService.sendMail(new NotificationEmail(
+                                "Someone commented on your post",
+                                user.getEmail(),
+                                message));
+        }
 }

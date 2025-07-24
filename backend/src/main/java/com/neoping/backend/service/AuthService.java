@@ -1,6 +1,5 @@
 package com.neoping.backend.service;
 
-
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -10,6 +9,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.sql.Date;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -46,7 +46,7 @@ public class AuthService {
     private static final String KEYSTORE_PATH = "keystore.jks";
     private static final String KEYSTORE_PASSWORD = "springblog";
     private static final String KEY_ALIAS = "springblog";
-    private static final String KEY_PASSWORD = "secret";
+    private static final String KEY_PASSWORD = "springblog"; // Change from "secret" to "springblog"
     private static final String KEYSTORE_TYPE = "JKS";
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
@@ -103,6 +103,35 @@ public class AuthService {
 
     public AuthenticationResponse login(LoginRequest loginRequest) {
         logger.info("Attempting to authenticate user: {}", loginRequest.getUsername());
+
+        // Check if user exists before attempting authentication
+        Optional<User> userOptional = userRepository.findByUsername(loginRequest.getUsername());
+        if (!userOptional.isPresent()) {
+            // Try with u/ prefix
+            userOptional = userRepository.findByUsername("u/" + loginRequest.getUsername());
+            if (!userOptional.isPresent()) {
+                // Try partial match
+                userOptional = userRepository.findAll().stream()
+                        .filter(u -> u.getUsername().toLowerCase().contains(loginRequest.getUsername().toLowerCase()) ||
+                                loginRequest.getUsername().toLowerCase().contains(u.getUsername().toLowerCase()))
+                        .findFirst();
+                if (userOptional.isPresent()) {
+                    logger.info("Found user with partial match: {} for input: {}",
+                            userOptional.get().getUsername(), loginRequest.getUsername());
+                }
+            } else {
+                logger.info("Found user with u/ prefix: {} for input: {}",
+                        userOptional.get().getUsername(), loginRequest.getUsername());
+            }
+        } else {
+            logger.info("Found user with exact match: {}", loginRequest.getUsername());
+        }
+
+        if (!userOptional.isPresent()) {
+            logger.warn("No user found for username: {}", loginRequest.getUsername());
+            throw new SpringRedditException("User not found with username: " + loginRequest.getUsername());
+        }
+
         try {
             Authentication authenticate = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -117,11 +146,12 @@ public class AuthService {
             response.setUsername(loginRequest.getUsername());
             response.setExpiresAt(Instant.now().plusMillis(jwtProvider.getJwtExpirationInMillis()));
             // Generate and store refresh token in DB
-RefreshToken refreshToken = refreshTokenService.generateRefreshToken();
-response.setRefreshToken(refreshToken.getTokenValue());
-logger.info("[LOGIN] Issued refresh token: {} for user: {}", refreshToken.getTokenValue(), loginRequest.getUsername());
-logger.info("Returning authentication response for user: {}", loginRequest.getUsername());
-return response;
+            RefreshToken refreshToken = refreshTokenService.generateRefreshToken();
+            response.setRefreshToken(refreshToken.getTokenValue());
+            logger.info("[LOGIN] Issued refresh token: {} for user: {}", refreshToken.getTokenValue(),
+                    loginRequest.getUsername());
+            logger.info("Returning authentication response for user: {}", loginRequest.getUsername());
+            return response;
         } catch (Exception e) {
             logger.error("Authentication failed for user: {}", loginRequest.getUsername(), e);
             throw new SpringRedditException("Authentication failed: " + e.getMessage(), e);
@@ -130,30 +160,32 @@ return response;
 
     public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
         String refreshToken = refreshTokenRequest.getRefreshToken();
-logger.info("[REFRESH] Received refresh token: {} for username: {}", refreshToken, refreshTokenRequest.getUsername());
-String username = refreshTokenRequest.getUsername();
+        logger.info("[REFRESH] Received refresh token: {} for username: {}", refreshToken,
+                refreshTokenRequest.getUsername());
+        String username = refreshTokenRequest.getUsername();
         try {
-    // Only validate the refresh token using the database (UUID-based)
-    refreshTokenService.validateRefreshToken(refreshToken);
+            // Only validate the refresh token using the database (UUID-based)
+            refreshTokenService.validateRefreshToken(refreshToken);
 
-    User user = userRepository.findByUsername(username)
-            .orElseThrow(() -> new SpringRedditException("User not found with username: " + username));
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new SpringRedditException("User not found with username: " + username));
 
-    Authentication authenticate = new UsernamePasswordAuthenticationToken(
-            user.getUsername(),
-            user.getPassword());
+            Authentication authenticate = new UsernamePasswordAuthenticationToken(
+                    user.getUsername(),
+                    user.getPassword());
 
-    SecurityContextHolder.getContext().setAuthentication(authenticate);
-    String token = jwtProvider.generateToken(authenticate);
+            SecurityContextHolder.getContext().setAuthentication(authenticate);
+            String token = jwtProvider.generateToken(authenticate);
 
-    AuthenticationResponse response = new AuthenticationResponse();
-    response.setToken(token);
-    response.setUsername(username);
-    response.setExpiresAt(Instant.now().plusMillis(jwtProvider.getJwtExpirationInMillis()));
-    response.setRefreshToken(refreshToken);
+            AuthenticationResponse response = new AuthenticationResponse();
+            response.setToken(token);
+            response.setUsername(username);
+            response.setExpiresAt(Instant.now().plusMillis(jwtProvider.getJwtExpirationInMillis()));
+            response.setRefreshToken(refreshToken);
 
-    return response;
-        } catch (com.neoping.backend.exception.RefreshTokenExpiredException | com.neoping.backend.exception.SpringRedditException e) {
+            return response;
+        } catch (com.neoping.backend.exception.RefreshTokenExpiredException
+                | com.neoping.backend.exception.SpringRedditException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Unexpected error: " + e.getMessage(), e);
