@@ -9,6 +9,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.sql.Date;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -102,6 +103,35 @@ public class AuthService {
 
     public AuthenticationResponse login(LoginRequest loginRequest) {
         logger.info("Attempting to authenticate user: {}", loginRequest.getUsername());
+
+        // Check if user exists before attempting authentication
+        Optional<User> userOptional = userRepository.findByUsername(loginRequest.getUsername());
+        if (!userOptional.isPresent()) {
+            // Try with u/ prefix
+            userOptional = userRepository.findByUsername("u/" + loginRequest.getUsername());
+            if (!userOptional.isPresent()) {
+                // Try partial match
+                userOptional = userRepository.findAll().stream()
+                        .filter(u -> u.getUsername().toLowerCase().contains(loginRequest.getUsername().toLowerCase()) ||
+                                loginRequest.getUsername().toLowerCase().contains(u.getUsername().toLowerCase()))
+                        .findFirst();
+                if (userOptional.isPresent()) {
+                    logger.info("Found user with partial match: {} for input: {}",
+                            userOptional.get().getUsername(), loginRequest.getUsername());
+                }
+            } else {
+                logger.info("Found user with u/ prefix: {} for input: {}",
+                        userOptional.get().getUsername(), loginRequest.getUsername());
+            }
+        } else {
+            logger.info("Found user with exact match: {}", loginRequest.getUsername());
+        }
+
+        if (!userOptional.isPresent()) {
+            logger.warn("No user found for username: {}", loginRequest.getUsername());
+            throw new SpringRedditException("User not found with username: " + loginRequest.getUsername());
+        }
+
         try {
             Authentication authenticate = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(

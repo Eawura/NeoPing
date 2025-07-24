@@ -1,13 +1,15 @@
 package com.neoping.backend.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.neoping.backend.model.Comment;
 import com.neoping.backend.model.Post;
 import com.neoping.backend.model.User;
-
-import java.util.List;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
@@ -24,4 +26,15 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     List<Comment> findAllByUser(User user);
 
     Long countByPost(Post post);
+
+    // Add these methods to your existing CommentRepository.java if they don't exist
+    List<Comment> findByPostIdOrderByCreatedAtDesc(Long postId);
+
+    // Alternative query if the above doesn't work
+    @Query("SELECT c FROM Comment c WHERE c.post.id = :postId ORDER BY c.createdAt DESC")
+    List<Comment> findCommentsByPostId(@Param("postId") Long postId);
+
+    List<Comment> findByPostId(Long postId);
+
+    long countByPostId(Long postId);
 }

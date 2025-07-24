@@ -6,8 +6,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.neoping.backend.dto.UpdateProfileRequest;
-import com.neoping.backend.dto.UserProfile;
 import com.neoping.backend.model.User;
 import com.neoping.backend.repository.UserRepository;
 
@@ -19,13 +17,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class UserService {
     private final UserRepository userRepository;
-    
+
     public User getCurrentUser() {
         try {
             Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
             if (principal instanceof UserDetails userDetails) {
                 return userRepository.findByUsername(userDetails.getUsername())
-                    .orElse(null);
+                        .orElse(null);
             }
             return null;
         } catch (Exception e) {
@@ -33,42 +31,20 @@ public class UserService {
         }
     }
 
-    @Transactional
-    public User updateUserProfile(UpdateProfileRequest profileUpdate) {
-        User user = getCurrentUser();
-        if (user == null) {
-            log.error("No authenticated user found for profile update");
-            throw new UsernameNotFoundException("No authenticated user found");
-        }
-
-        log.info("Updating profile for user: {}", user.getUsername());
-        
-        if (profileUpdate.getUsername() != null && !profileUpdate.getUsername().isBlank()) {
-            user.setUsername(profileUpdate.getUsername());
-            log.debug("Updated username to: {}", profileUpdate.getUsername());
-        }
-        
-        if (profileUpdate.getBio() != null) {
-            user.setBio(profileUpdate.getBio());
-            log.debug("Updated bio");
-        }
-        
-        if (profileUpdate.getAvatar() != null) {
-            user.setAvatar(profileUpdate.getAvatar());
-            log.debug("Updated avatar");
-        }
-        
-        User updatedUser = userRepository.save(user);
-        log.info("Successfully updated profile for user: {}", user.getUsername());
-        return updatedUser;
+    public boolean userExists(String username) {
+        return userRepository.findByUsername(username).isPresent();
     }
-    
-    @Transactional
-    public void updateUserProfile(UserProfile profile) {
-        User user = getCurrentUser();
-        if (profile.getEmail() != null && !profile.getEmail().equals(user.getEmail())) {
-            user.setEmail(profile.getEmail());
-        }
-        userRepository.save(user);
+
+    public java.util.List<java.util.Map<String, Object>> getAllUsersBasicInfo() {
+        return userRepository.findAll().stream()
+                .map(user -> {
+                    java.util.Map<String, Object> userMap = new java.util.HashMap<>();
+                    userMap.put("id", user.getId());
+                    userMap.put("username", user.getUsername());
+                    userMap.put("email", user.getEmail());
+                    userMap.put("enabled", user.isEnabled());
+                    return userMap;
+                })
+                .collect(java.util.stream.Collectors.toList());
     }
 }

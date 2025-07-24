@@ -128,10 +128,16 @@ export default function AuthScreen() {
 
       if (result.success) {
         console.log("Login successful:", result.data);
+        const { token, refreshToken, username: loggedInUsername } = result.data;
 
-        await AsyncStorage.setItem("authToken", result.data.token);
-        await AsyncStorage.setItem("refreshToken", result.data.refreshToken);
-        await AsyncStorage.setItem("username", result.data.username);
+        await AsyncStorage.setItem("auth_token", token); // ✅ Matches api.js
+        await AsyncStorage.setItem("refresh_token", refreshToken);
+        await AsyncStorage.setItem("username", loggedInUsername); // Add this
+
+        console.log("✅ Auth token saved to storage with key: auth_token");
+        console.log(
+          "✅ Refresh token saved to storage with key: refresh_token"
+        );
 
         Toast.show({
           type: "success",

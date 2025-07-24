@@ -9,10 +9,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserProfile {
-    private Long id;
-    private String username;
-    private String email;
-    private String bio;
-    private String avatar;
+public class LikeResponse {
+    private boolean liked;
+    private int likesCount;
+    private boolean success;
+    private String message;
+    private String error;
 }

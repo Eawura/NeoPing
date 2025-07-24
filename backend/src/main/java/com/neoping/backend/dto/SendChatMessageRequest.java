@@ -6,11 +6,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@Builder
-@AllArgsConstructor
 @NoArgsConstructor
-public class UpdateProfileRequest {
-    private String username;
-    private String bio;
-    private String avatar;
+@AllArgsConstructor
+@Builder
+public class SendChatMessageRequest {
+    private Long senderId;
+    private Long receiverId;
+    private String content;
 }

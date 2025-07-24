@@ -221,7 +221,7 @@ api.interceptors.response.use(
 
     // Handle 401 Unauthorized errors
     if (
-      error.response?.status === 401 &&
+      (error.response?.status === 401 || error.response?.status === 403) &&
       originalRequest &&
       !originalRequest._retry
     ) {
@@ -425,6 +425,106 @@ export const authAPI = {
       };
     }
   },
+
+  async isAuthenticated() {
+    try {
+      console.log("[AUTH] 🔍 Checking authentication status...");
+
+      // Check if we have a token
+      const token = await storage.getItem("auth_token");
+
+      if (!token) {
+        console.log("[AUTH] ❌ No auth token found");
+        return { success: false, authenticated: false };
+      }
+
+      // Verify token with backend by calling /auth/me
+      const response = await api.get("/auth/me");
+
+      if (response.data) {
+        console.log("[AUTH] ✅ User is authenticated:", response.data.username);
+        return {
+          success: true,
+          authenticated: true,
+          user: response.data,
+        };
+      } else {
+        console.log("[AUTH] ❌ Invalid token response");
+        return { success: false, authenticated: false };
+      }
+    } catch (error) {
+      console.error("[AUTH] ❌ Authentication check failed:", error);
+
+      // If 401, token is invalid
+      if (error.response?.status === 401) {
+        console.log("[AUTH] 🔄 Token expired, clearing storage");
+        await storage.deleteItem("auth_token");
+        await storage.deleteItem("refresh_token");
+      }
+
+      return {
+        success: false,
+        authenticated: false,
+        error: error.message,
+      };
+    }
+  },
+
+  async getCurrentUser() {
+    try {
+      console.log("[AUTH] 🔍 Getting current user...");
+
+      const response = await api.get("/auth/me");
+
+      if (response.data) {
+        console.log(
+          "[AUTH] ✅ Current user retrieved:",
+          response.data.username
+        );
+        return {
+          success: true,
+          user: response.data,
+        };
+      } else {
+        return { success: false, error: "No user data received" };
+      }
+    } catch (error) {
+      console.error("[AUTH] ❌ Get current user failed:", error);
+
+      // If 401/403, clear invalid tokens
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.log("[AUTH] 🔄 Clearing invalid tokens...");
+        await storage.deleteItem("auth_token");
+        await storage.deleteItem("refresh_token");
+      }
+
+      return {
+        success: false,
+        error: error.message,
+        needsLogin:
+          error.response?.status === 401 || error.response?.status === 403,
+      };
+    }
+  },
+
+  // ✅ BONUS: Add logout function too
+  async logout() {
+    try {
+      console.log("[AUTH] 🚪 Logging out user...");
+
+      // Clear tokens from storage
+      await storage.deleteItem("auth_token");
+      await storage.deleteItem("refresh_token");
+      await storage.deleteItem("username");
+      await storage.deleteItem("user_data");
+
+      console.log("[AUTH] ✅ Logout successful - tokens cleared");
+      return { success: true };
+    } catch (error) {
+      console.error("[AUTH] ❌ Logout error:", error);
+      return { success: false, error: error.message };
+    }
+  },
 };
 
 // =============================================
@@ -501,6 +601,63 @@ export const userAPI = {
       };
     }
   },
+
+  // ✅ ADD: Correct profile update function
+  updateCurrentUserProfile: async (profileData) => {
+    try {
+      console.log("[USER] 🔄 Updating current user profile...", profileData);
+
+      const response = await api.put("/auth/me", {
+        bio: profileData.bio,
+        displayName: profileData.username, // ✅ Map username to displayName
+        location: profileData.location,
+        website: profileData.website,
+        avatarUrl: profileData.avatarUrl || profileData.avatar,
+      });
+
+      console.log("[USER] ✅ Profile update response:", response.data);
+      return {
+        success: true,
+        data: response.data,
+        message: "Profile updated successfully",
+      };
+    } catch (error) {
+      console.error("[USER] ❌ Profile update failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Profile update failed",
+      };
+    }
+  },
+
+  // ✅ ADD: Get current user profile
+  getCurrentUserProfile: async () => {
+    try {
+      console.log("[USER] 🔍 Getting current user profile...");
+
+      const response = await api.get("/auth/me");
+
+      console.log("[USER] ✅ Profile fetch response:", response.data);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error("[USER] ❌ Profile fetch failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to get profile",
+      };
+    }
+  },
+
+  // ... rest of existing functions ...
 };
 
 // =============================================
@@ -613,27 +770,28 @@ export const pingAPI = {
 // =============================================
 
 export const postsAPI = {
-  // Get all posts
-  getPosts: async (limit = 20, offset = 0, category = null) => {
+  // Get all posts for home feed
+  getAllPosts: async (limit = 20, offset = 0, category = null) => {
     try {
-      console.log("[POSTS] Fetching posts...");
+      console.log("[POSTS] Fetching all posts for home feed...");
       const response = await api.get("/posts", {
         params: { limit, offset, category },
       });
 
       return {
         success: true,
-        posts: response.data.posts || [],
+        posts: response.data.posts || response.data || [], // Handle different response formats
         total: response.data.total || 0,
+        message: "Posts fetched successfully",
       };
     } catch (error) {
-      console.error("[POSTS] Get posts failed:", error);
+      console.error("[POSTS] Get all posts failed:", error);
       return {
         success: false,
         error:
           error.response?.data?.message ||
           error.message ||
-          "Failed to get posts",
+          "Failed to fetch posts",
       };
     }
   },
@@ -648,7 +806,7 @@ export const postsAPI = {
 
       return {
         success: true,
-        posts: response.data.posts || [],
+        posts: response.data.posts || response.data || [],
       };
     } catch (error) {
       console.error("[POSTS] Get popular posts failed:", error);
@@ -662,6 +820,31 @@ export const postsAPI = {
     }
   },
 
+  // Get posts by category/community
+  getPostsByCategory: async (category, limit = 20, offset = 0) => {
+    try {
+      console.log("[POSTS] Fetching posts by category:", category);
+      const response = await api.get(`/posts/category/${category}`, {
+        params: { limit, offset },
+      });
+
+      return {
+        success: true,
+        posts: response.data.posts || response.data || [],
+        total: response.data.total || 0,
+      };
+    } catch (error) {
+      console.error("[POSTS] Get posts by category failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to get posts by category",
+      };
+    }
+  },
+
   // Create new post
   createPost: async (postData) => {
     try {
@@ -670,7 +853,7 @@ export const postsAPI = {
 
       return {
         success: true,
-        post: response.data.post,
+        post: response.data.post || response.data,
         message: "Post created successfully",
       };
     } catch (error) {
@@ -685,7 +868,33 @@ export const postsAPI = {
     }
   },
 
-  // Like/unlike post
+  // Vote on a post (upvote/downvote)
+  votePost: async (postId, voteType) => {
+    try {
+      console.log("[POSTS] Voting on post:", postId, "Type:", voteType);
+      const response = await api.post(`/posts/${postId}/vote`, {
+        voteType: voteType, // 'UPVOTE' or 'DOWNVOTE'
+      });
+
+      return {
+        success: true,
+        voteCount: response.data.voteCount,
+        userVote: response.data.userVote,
+        message: "Vote registered successfully",
+      };
+    } catch (error) {
+      console.error("[POSTS] Vote post failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to vote on post",
+      };
+    }
+  },
+
+  // Like/unlike post (alternative to voting)
   toggleLike: async (postId) => {
     try {
       console.log("[POSTS] Toggling like for post:", postId);
@@ -694,7 +903,8 @@ export const postsAPI = {
       return {
         success: true,
         liked: response.data.liked,
-        likesCount: response.data.likesCount,
+        likesCount: response.data.likesCount || response.data.likes,
+        message: response.data.liked ? "Post liked" : "Post unliked",
       };
     } catch (error) {
       console.error("[POSTS] Toggle like failed:", error);
@@ -704,6 +914,100 @@ export const postsAPI = {
           error.response?.data?.message ||
           error.message ||
           "Failed to toggle like",
+      };
+    }
+  },
+
+  // Get single post by ID
+  getPostById: async (postId) => {
+    try {
+      console.log("[POSTS] Fetching post by ID:", postId);
+      const response = await api.get(`/posts/${postId}`);
+
+      return {
+        success: true,
+        post: response.data.post || response.data,
+      };
+    } catch (error) {
+      console.error("[POSTS] Get post by ID failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to get post",
+      };
+    }
+  },
+
+  // Share post
+  sharePost: async (postId, shareData = {}) => {
+    try {
+      console.log("[POSTS] Sharing post:", postId);
+      const response = await api.post(`/posts/${postId}/share`, shareData);
+
+      return {
+        success: true,
+        sharesCount: response.data.sharesCount,
+        message: "Post shared successfully",
+      };
+    } catch (error) {
+      console.error("[POSTS] Share post failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to share post",
+      };
+    }
+  },
+
+  // Report post
+  reportPost: async (postId, reason) => {
+    try {
+      console.log("[POSTS] Reporting post:", postId, "Reason:", reason);
+      const response = await api.post(`/posts/${postId}/report`, {
+        reason,
+      });
+
+      return {
+        success: true,
+        message: "Post reported successfully",
+      };
+    } catch (error) {
+      console.error("[POSTS] Report post failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to report post",
+      };
+    }
+  },
+
+  // Get user's posts
+  getUserPosts: async (userId, limit = 20, offset = 0) => {
+    try {
+      console.log("[POSTS] Fetching posts for user:", userId);
+      const response = await api.get(`/users/${userId}/posts`, {
+        params: { limit, offset },
+      });
+
+      return {
+        success: true,
+        posts: response.data.posts || response.data || [],
+        total: response.data.total || 0,
+      };
+    } catch (error) {
+      console.error("[POSTS] Get user posts failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to get user posts",
       };
     }
   },
@@ -724,7 +1028,7 @@ export const commentsAPI = {
 
       return {
         success: true,
-        comments: response.data.comments || [],
+        comments: response.data.comments || response.data || [],
         total: response.data.total || 0,
       };
     } catch (error) {
@@ -740,16 +1044,17 @@ export const commentsAPI = {
   },
 
   // Add comment to post
-  addComment: async (postId, content) => {
+  addComment: async (postId, content, parentCommentId = null) => {
     try {
       console.log("[COMMENTS] Adding comment to post:", postId);
       const response = await api.post(`/posts/${postId}/comments`, {
         content,
+        parentCommentId, // For nested replies
       });
 
       return {
         success: true,
-        comment: response.data.comment,
+        comment: response.data.comment || response.data,
         message: "Comment added successfully",
       };
     } catch (error) {
@@ -763,4 +1068,273 @@ export const commentsAPI = {
       };
     }
   },
+
+  // Like/unlike comment
+  toggleCommentLike: async (commentId) => {
+    try {
+      console.log("[COMMENTS] Toggling like for comment:", commentId);
+      const response = await api.post(`/comments/${commentId}/like`);
+
+      return {
+        success: true,
+        liked: response.data.liked,
+        likesCount: response.data.likesCount,
+      };
+    } catch (error) {
+      console.error("[COMMENTS] Toggle comment like failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to toggle comment like",
+      };
+    }
+  },
+
+  // Delete comment
+  deleteComment: async (commentId) => {
+    try {
+      console.log("[COMMENTS] Deleting comment:", commentId);
+      const response = await api.delete(`/comments/${commentId}`);
+
+      return {
+        success: true,
+        message: "Comment deleted successfully",
+      };
+    } catch (error) {
+      console.error("[COMMENTS] Delete comment failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to delete comment",
+      };
+    }
+  },
+
+  // Report comment
+  reportComment: async (commentId, reason) => {
+    try {
+      console.log("[COMMENTS] Reporting comment:", commentId);
+      const response = await api.post(`/comments/${commentId}/report`, {
+        reason,
+      });
+
+      return {
+        success: true,
+        message: "Comment reported successfully",
+      };
+    } catch (error) {
+      console.error("[COMMENTS] Report comment failed:", error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to report comment",
+      };
+    }
+  },
+};
+
+// In your API service
+const getAuthHeaders = async () => {
+  const token = await AsyncStorage.getItem("jwt_token");
+  return {
+    "Content-Type": "application/json",
+    Authorization: token ? `Bearer ${token}` : "",
+  };
+};
+
+export const fetchPosts = async () => {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/posts`, {
+    method: "GET",
+    headers,
+  });
+
+  if (response.status === 401) {
+    // Redirect to login
+    throw new Error("Authentication required");
+  }
+
+  return response.json();
+};
+
+// Add this test function at the end of your file:
+export const testPostsAPI = async () => {
+  console.log("🧪 Testing Posts API...");
+
+  try {
+    // Test getting posts
+    const postsResult = await postsAPI.getAllPosts(5, 0);
+    console.log("✅ Get Posts Result:", postsResult);
+
+    if (postsResult.success) {
+      console.log(`📊 Found ${postsResult.posts.length} posts`);
+
+      // If we have posts, test other operations
+      if (postsResult.posts.length > 0) {
+        const firstPost = postsResult.posts[0];
+        console.log(
+          "🎯 Testing with first post:",
+          firstPost.id || firstPost.postId
+        );
+
+        // Test getting comments
+        const commentsResult = await commentsAPI.getComments(
+          firstPost.id || firstPost.postId,
+          5
+        );
+        console.log("💬 Comments Result:", commentsResult);
+      }
+    }
+
+    return postsResult;
+  } catch (error) {
+    console.error("❌ Posts API Test Failed:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Create a new post
+export const createPost = async (postData) => {
+  try {
+    const token = await getAuthToken();
+    if (!token) {
+      return { success: false, error: "Please log in to create posts" };
+    }
+
+    console.log("[API] Creating post:", postData);
+
+    const response = await apiRequest("/posts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(postData),
+    });
+
+    if (response.success) {
+      console.log("[API] Post created successfully:", response.data);
+      return { success: true, post: response.data };
+    } else {
+      console.error("[API] Failed to create post:", response.error);
+      return {
+        success: false,
+        error: response.error || "Failed to create post",
+      };
+    }
+  } catch (error) {
+    console.error("[API] Error creating post:", error);
+    return { success: false, error: "Network error" };
+  }
+};
+
+// Get current user's posts
+// Update your getUserPosts function in api.js
+export const getUserPosts = async () => {
+  try {
+    console.log("[API] 🔍 Getting user posts...");
+
+    // Use the correct endpoint for current user's posts
+    const response = await apiRequest("/posts/user/me", {
+      method: "GET",
+    });
+
+    console.log("[API] 🔍 getUserPosts response:", response);
+
+    if (response && Array.isArray(response)) {
+      // If response is directly an array
+      console.log(`[API] ✅ Retrieved ${response.length} user posts`);
+      return { success: true, data: response };
+    } else if (response && response.success && response.data) {
+      // If response is wrapped in success object
+      console.log(`[API] ✅ Retrieved ${response.data.length} user posts`);
+      return { success: true, data: response.data };
+    } else {
+      console.log("[API] ℹ️ No user posts found");
+      return { success: true, data: [] };
+    }
+  } catch (error) {
+    console.error("[API] ❌ Error getting user posts:", error);
+    return { success: false, error: "Failed to fetch user posts" };
+  }
+};
+
+// Add these functions to the end of your existing api.js file
+
+// Add comment to a post
+export const addPostComment = async (postId, content) => {
+  try {
+    const response = await apiRequest(`/posts/${postId}/comments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (response.success) {
+      console.log(`[API] Comment added to post ${postId}:`, response.data);
+      return { success: true, data: response.data };
+    } else {
+      console.error("[API] Failed to add comment:", response.error);
+      return { success: false, error: response.error };
+    }
+  } catch (error) {
+    console.error("[API] Error adding comment:", error);
+    return { success: false, error: "Network error" };
+  }
+};
+
+// Get comments for a post
+export const getPostComments = async (postId) => {
+  try {
+    const response = await apiRequest(`/posts/${postId}/comments`, {
+      method: "GET",
+    });
+
+    if (response.success) {
+      console.log(
+        `[API] Retrieved ${response.data.comments.length} comments for post ${postId}`
+      );
+      return { success: true, data: response.data.comments };
+    } else {
+      console.error("[API] Failed to get comments:", response.error);
+      return { success: true, data: [] }; // Return empty array on failure
+    }
+  } catch (error) {
+    console.error("[API] Error getting comments:", error);
+    return { success: true, data: [] };
+  }
+};
+
+// Update your togglePostLike function in api.js:
+
+export const togglePostLike = async (postId) => {
+  try {
+    const response = await apiRequest(`/posts/${postId}/like`, {
+      method: "POST",
+    });
+
+    if (response.success) {
+      console.log(`[API] Post ${postId} like toggled:`, response);
+      return {
+        success: true,
+        data: {
+          liked: response.liked,
+          likesCount: response.likesCount,
+        },
+      };
+    } else {
+      console.error("[API] Failed to toggle like:", response.error);
+      return { success: false, error: response.error };
+    }
+  } catch (error) {
+    console.error("[API] Error toggling like:", error);
+    return { success: false, error: "Network error" };
+  }
 };

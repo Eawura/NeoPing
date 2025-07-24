@@ -1,7 +1,7 @@
 import { AntDesign, Feather, Ionicons } from "@expo/vector-icons";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Stack, usePathname, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -12,13 +12,13 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { useBookmarks } from "../../components/BookmarkContext";
 import CollectionModal from "../../components/CollectionModal";
 import ImageModal from "../../components/ImageModal";
@@ -27,7 +27,12 @@ import PopupMenu from "../../components/PopupMenu";
 import { usePosts } from "../../components/PostContext";
 import ProfileModal from "../../components/ProfileModal";
 import { useTheme } from "../../components/ThemeContext";
+import { postsAPI, testConnection } from "../utils/api";
+// Update your import (around line 4)
+import { createPost, getUserPosts } from "../utils/api";
 import { getRelativeTime } from "../utils/timeUtils";
+// Replace line 25 with this complete import:
+import { addPostComment, getPostComments, togglePostLike } from "../utils/api";
 
 // Image mapping for profile pictures and post images
 const imageMap = {
@@ -400,10 +405,15 @@ const Post = ({
   );
   // Double-tap logic using ref
   const lastTap = useRef(null);
+
+  const handleLikePress = () => {
+    onLike(post.id);
+  };
+
   const handleDoubleTap = () => {
     const now = Date.now();
     if (lastTap.current && now - lastTap.current < 300) {
-      onLike(post.id);
+      handleLikePress();
     }
     lastTap.current = now;
   };
@@ -480,7 +490,7 @@ const Post = ({
         <View style={styles.actionGroup}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => onLike(post.id)}
+            onPress={handleLikePress}
           >
             <AntDesign
               name={post.liked ? "heart" : "hearto"}
@@ -556,29 +566,62 @@ const Post = ({
 const Header = ({ menuOpen, setMenuOpen, onProfilePress, onSearchPress }) => {
   const router = useRouter();
   const { themeColors } = useTheme();
+
   return (
-    <View style={[styles.header, { backgroundColor: themeColors.background }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: themeColors.background,
+          borderBottomColor: themeColors.border,
+        },
+      ]}
+    >
       <View style={styles.headerLeft}>
         <TouchableOpacity
-          style={{ flexDirection: "row", alignItems: "center" }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 8, // More touch area
+            paddingRight: 12,
+          }}
           onPress={() => setMenuOpen((open) => !open)}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.logoText, { color: "#2E45A3" }]}>Neoping </Text>
+          <Text style={[styles.logoText, { color: "#2E45A3" }]}>NeoPing</Text>
           <Ionicons
             name={menuOpen ? "chevron-up" : "chevron-down"}
-            size={18}
+            size={Platform.OS === "web" ? 18 : 16}
             color={themeColors.icon}
+            style={{ marginLeft: 4 }}
           />
         </TouchableOpacity>
       </View>
+
       <View style={styles.headerIcons}>
-        <TouchableOpacity style={{ marginRight: 16 }} onPress={onSearchPress}>
-          <Ionicons name="search" size={24} color={themeColors.icon} />
+        <TouchableOpacity
+          style={{
+            marginRight: 12,
+            padding: 8, // Bigger touch area
+          }}
+          onPress={onSearchPress}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="search"
+            size={Platform.OS === "web" ? 24 : 22}
+            color={themeColors.icon}
+          />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onProfilePress}>
+
+        <TouchableOpacity
+          onPress={onProfilePress}
+          style={{ padding: 4 }} // Touch area
+          activeOpacity={0.7}
+        >
           <Ionicons
             name="person-circle-outline"
-            size={28}
+            size={Platform.OS === "web" ? 28 : 26}
             color={themeColors.icon}
           />
         </TouchableOpacity>
@@ -589,13 +632,131 @@ const Header = ({ menuOpen, setMenuOpen, onProfilePress, onSearchPress }) => {
 
 // Helper function to format large numbers (e.g., 1000 -> 1K, 1000000 -> 1M)
 const formatCount = (num) => {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  // Handle undefined, null, or non-numeric values
+  if (num === undefined || num === null || isNaN(num)) {
+    return "0";
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+
+  const numValue = Number(num);
+
+  if (numValue >= 1000000) {
+    return (numValue / 1000000).toFixed(1) + "M";
+  } else if (numValue >= 1000) {
+    return (numValue / 1000).toFixed(1) + "K";
   }
-  return num;
+  return numValue.toString();
+};
+
+// Empty Posts Component
+const EmptyPostsComponent = ({
+  themeColors,
+  onRefresh,
+  isBackend,
+  isLoading,
+}) => {
+  return (
+    <View
+      style={[
+        styles.emptyContainer,
+        { backgroundColor: themeColors.background },
+      ]}
+    >
+      {/* Animated Icon */}
+      <View style={styles.emptyIconContainer}>
+        <View
+          style={[
+            styles.emptyIconCircle,
+            { backgroundColor: themeColors.card },
+          ]}
+        >
+          <Feather
+            name="message-square"
+            size={48}
+            color={themeColors.accent || "#2E45A3"}
+          />
+        </View>
+
+        {/* Floating particles animation */}
+        <View
+          style={[
+            styles.particle,
+            styles.particle1,
+            { backgroundColor: themeColors.accent },
+          ]}
+        />
+        <View
+          style={[
+            styles.particle,
+            styles.particle2,
+            { backgroundColor: themeColors.accent },
+          ]}
+        />
+        <View
+          style={[
+            styles.particle,
+            styles.particle3,
+            { backgroundColor: themeColors.accent },
+          ]}
+        />
+      </View>
+
+      {/* Main Message */}
+      <Text style={[styles.emptyTitle, { color: themeColors.text }]}>
+        {isLoading ? "Loading Posts..." : "No Posts Yet"}
+      </Text>
+
+      <Text
+        style={[styles.emptySubtitle, { color: themeColors.textSecondary }]}
+      >
+        {isLoading
+          ? "Fetching the latest content for you"
+          : isBackend
+          ? "Be the first to share something amazing!"
+          : "Pull down to refresh and see the latest posts"}
+      </Text>
+
+      {/* Action Button */}
+      {!isLoading && (
+        <TouchableOpacity
+          style={[
+            styles.emptyButton,
+            { backgroundColor: themeColors.accent || "#2E45A3" },
+          ]}
+          onPress={onRefresh}
+        >
+          <Feather
+            name="refresh-cw"
+            size={20}
+            color="#fff"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.emptyButtonText}>Refresh Posts</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Fun Facts */}
+      <View style={styles.emptyTips}>
+        <View style={styles.tipItem}>
+          <Text style={styles.tipEmoji}>💡</Text>
+          <Text style={[styles.tipText, { color: themeColors.textSecondary }]}>
+            Tip: Double-tap posts to like them quickly
+          </Text>
+        </View>
+        <View style={styles.tipItem}>
+          <Text style={styles.tipEmoji}>🔍</Text>
+          <Text style={[styles.tipText, { color: themeColors.textSecondary }]}>
+            Use search to find specific content
+          </Text>
+        </View>
+        <View style={styles.tipItem}>
+          <Text style={styles.tipEmoji}>📚</Text>
+          <Text style={[styles.tipText, { color: themeColors.textSecondary }]}>
+            Bookmark posts to read them later
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
 };
 
 const index = () => {
@@ -655,6 +816,158 @@ const index = () => {
   const [selectedMorePost, setSelectedMorePost] = useState(null);
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [collectionModalPost, setCollectionModalPost] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [createPostVisible, setCreatePostVisible] = useState(false);
+
+  // Debug function to log post data
+  const debugPostData = () => {
+    console.log("🔍 DEBUG: Current post data:");
+    console.log("User posts count:", userPosts.length);
+    console.log("Demo posts count:", posts.length);
+    console.log(
+      "User posts:",
+      userPosts.map((p) => ({ id: p.id, title: p.title, user: p.user }))
+    );
+    console.log(
+      "Demo posts:",
+      posts.map((p) => ({ id: p.id, title: p.title, user: p.user }))
+    );
+  };
+
+  // Test user posts to see the hybrid system working
+  const testUserPosts = [
+    {
+      id: "user-1",
+      title: "My First Post!",
+      content: "This is my first post on NeoPing. Excited to be here! 🎉",
+      image: null,
+      user: "You",
+      avatar: "Penguin.jpg", // Add avatar
+      timestamp: new Date(),
+      likes: 5,
+      comments: 2,
+      shares: 1,
+      liked: false,
+      saved: false,
+      awarded: false,
+      isUserPost: true,
+    },
+    {
+      id: "user-2",
+      title: "Beautiful Sunset Today",
+      content:
+        "Just witnessed an amazing sunset. Nature never fails to amaze me! 🌅",
+      image: "Random.jpg", // Use existing image from your imageMap
+      user: "You",
+      avatar: "Penguin.jpg",
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      likes: 12,
+      comments: 8,
+      shares: 3,
+      liked: false,
+      saved: false,
+      awarded: false,
+      isUserPost: true,
+    },
+  ];
+
+  // Load user posts from database
+  // Replace your existing loadUserPostsFromDatabase function:
+  const loadUserPostsFromDatabase = async () => {
+    try {
+      console.log("🔍 Loading user posts from database...");
+      const result = await getUserPosts();
+
+      console.log("🔍 API response:", result);
+
+      if (result && result.success && result.data && result.data.length > 0) {
+        // Transform posts with proper like/comment data
+        const transformedPosts = result.data.map((post) => ({
+          id: post.id,
+          title: post.title,
+          content: post.content,
+          image: post.imageUrl,
+          user: "You", // Mark as current user
+          avatar: "Penguin.jpg",
+          timestamp: new Date(post.createdDate || post.createdAt),
+          likes: post.upvotes || post.voteCount || 0,
+          comments: post.commentCount || 0,
+          shares: 0,
+          liked: post.userLiked || false,
+          saved: false,
+          awarded: false,
+          isUserPost: true, // Important flag
+        }));
+
+        setUserPosts(transformedPosts);
+        console.log(
+          `✅ Loaded ${transformedPosts.length} user posts from database`
+        );
+      } else {
+        console.log("ℹ️ No posts found in database, using test posts");
+        setUserPosts(testUserPosts);
+      }
+    } catch (error) {
+      console.error("❌ Error loading user posts:", error);
+      setUserPosts(testUserPosts);
+    }
+  };
+
+  // Initialize with user posts from database
+  useEffect(() => {
+    loadUserPostsFromDatabase();
+  }, []);
+
+  // Transform post data to match our frontend format
+  const transformPost = (postData) => ({
+    ...postData,
+    id: postData.id || Date.now().toString(),
+    timestamp: postData.timestamp || new Date().toISOString(),
+    isUserPost: true,
+    likes: postData.likes || 0,
+    comments: postData.comments || 0,
+    shares: postData.shares || 0,
+    liked: postData.liked || false,
+    saved: postData.saved || false,
+    awarded: postData.awarded || false,
+  });
+
+  // Function to add a new post to the database
+  const addUserPost = async (postData) => {
+    try {
+      const result = await createPost(postData);
+      if (result.success) {
+        const newPost = transformPost(result.data);
+        setUserPosts((prev) => [newPost, ...prev]);
+        return newPost;
+      }
+      return null;
+    } catch (error) {
+      console.error("❌ Failed to create post:", error);
+      // Optionally show error to user
+      return null;
+    }
+  };
+
+  // Function to delete a post
+  const deleteUserPost = (postId) => {
+    setUserPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId));
+  };
+
+  // Function to combine posts from different sources
+  const getCombinedPosts = () => {
+    if (useBackend && connectionStatus === "connected") {
+      // In hybrid mode, combine backend posts with user posts
+      // Filter out any user posts that might have been saved to backend
+      const userPostsNotInBackend = userPosts.filter(
+        (userPost) =>
+          !backendPosts.some((backendPost) => backendPost.id === userPost.id)
+      );
+      return [...backendPosts, ...userPostsNotInBackend];
+    }
+    // In local mode, combine dummy posts with user posts
+    return [...userPosts, ...posts];
+  };
 
   // Force re-render every minute to update timestamps
   const [, setTimeUpdate] = useState(0);
@@ -666,8 +979,604 @@ const index = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter and sort posts for Home feed
-  const filteredPosts = posts
+  // State for backend integration
+  const [backendPosts, setBackendPosts] = useState([]);
+  const [useBackend, setUseBackend] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("checking"); // 'checking', 'connected', 'disconnected'
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [backendError, setBackendError] = useState(null);
+
+  // Check backend connection on component mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        setConnectionStatus("checking");
+        const response = await testConnection();
+        if (response?.success) {
+          setConnectionStatus("connected");
+          fetchBackendPosts(true);
+        } else {
+          setConnectionStatus("disconnected");
+          setUseBackend(false);
+          console.log("Backend connection failed, using dummy data");
+        }
+      } catch (error) {
+        console.error("Error checking backend connection:", error);
+        setConnectionStatus("disconnected");
+        setUseBackend(false);
+      }
+    };
+
+    checkBackend();
+  }, []);
+
+  // Handle toggling between backend and dummy data
+  const handleToggleBackend = async () => {
+    const newUseBackend = !useBackend;
+    setUseBackend(newUseBackend);
+
+    if (newUseBackend) {
+      // If switching to backend mode, check connection and fetch posts
+      try {
+        setLoading(true);
+        setConnectionStatus("checking");
+
+        // Check backend connection
+        const isConnected = await checkBackendConnection();
+
+        if (isConnected) {
+          setConnectionStatus("connected");
+          await fetchBackendPosts(true);
+          Toast.show({
+            type: "success",
+            text1: "Connected to Backend",
+            text2: "Now showing live posts from the server",
+          });
+        } else {
+          setConnectionStatus("disconnected");
+          setUseBackend(false);
+          Toast.show({
+            type: "error",
+            text1: "Connection Failed",
+            text2: "Could not connect to the server. Using demo data.",
+          });
+        }
+      } catch (error) {
+        console.error("Error toggling backend:", error);
+        setConnectionStatus("disconnected");
+        setUseBackend(false);
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to connect to the server. Using demo data.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If switching to dummy data mode
+      setConnectionStatus("disconnected");
+      setBackendPosts([]);
+      setPage(0);
+      setHasMore(true);
+      Toast.show({
+        type: "info",
+        text1: "Demo Mode",
+        text2: "Now showing demo posts",
+      });
+    }
+  };
+
+  // Check backend connection
+  const checkBackendConnection = async () => {
+    try {
+      console.log("🔍 Checking backend connection...");
+      const response = await testConnection();
+
+      if (response.success) {
+        console.log("✅ Backend connection successful");
+        setConnectionStatus("connected");
+        setBackendError(null);
+        return true;
+      } else {
+        console.log("❌ Backend connection failed:", response.error);
+        setConnectionStatus("failed");
+        setBackendError(response.error);
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ Connection test error:", error);
+      setConnectionStatus("failed");
+      setBackendError("Network error. Please check your connection.");
+      return false;
+    }
+  };
+
+  // Fetch posts from backend
+  const fetchBackendPosts = async (reset = false) => {
+    if (loading || (loadingMore && !reset)) return;
+
+    try {
+      if (reset) {
+        setLoading(true);
+        setBackendError(null);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const limit = 10;
+      const response = await postsAPI.getPosts({
+        page: reset ? 0 : page,
+        limit,
+      });
+
+      if (response && response.success) {
+        const newPosts = response.data.posts || [];
+
+        // Transform backend data to match your existing format
+        const transformedPosts = newPosts.map(transformBackendPost);
+
+        if (reset) {
+          setBackendPosts(transformedPosts);
+          setPage(1);
+        } else {
+          setBackendPosts((prev) => [...prev, ...transformedPosts]);
+          setPage((prev) => prev + 1);
+        }
+
+        setHasMore(newPosts.length === limit);
+        setBackendError(null);
+      } else {
+        throw new Error(response?.message || "Failed to fetch posts");
+      }
+    } catch (error) {
+      console.error("Error fetching backend posts:", error);
+      setBackendError(error.message || "Failed to load posts");
+
+      // If it's not a reset (initial load), show error toast
+      if (!reset) {
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to load more posts",
+        });
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Transform backend post format to match frontend format
+  const transformBackendPost = (backendPost) => {
+    return {
+      id: backendPost._id || backendPost.id,
+      title: backendPost.title || "",
+      content: backendPost.content || "",
+      user: backendPost.author?.username || "Anonymous",
+      timestamp: backendPost.createdAt || new Date().toISOString(),
+      likes: backendPost.likes || 0,
+      comments: backendPost.comments || 0,
+      shares: backendPost.shares || 0,
+      liked: backendPost.liked || false,
+      saved: backendPost.saved || false,
+      image: backendPost.image || null,
+      avatar: backendPost.author?.avatar || "default_avatar.jpg",
+    };
+  };
+
+  // Handle like/unlike for both user posts and demo posts
+  // Replace your ENTIRE handleLike function (around line 1100) with this:
+  // Replace your ENTIRE handleLike function (around line 1168) with this:
+  const handleLike = async (postId) => {
+    console.log("👍 Handling like for post:", postId);
+
+    // Find the post in the ACTUAL data you're displaying
+    const userPost = userPosts.find((post) => post.id === postId);
+    const demoPost = posts.find((post) => post.id === postId);
+
+    console.log("🔍 Found in user posts:", !!userPost);
+    console.log("🔍 Found in demo posts:", !!demoPost);
+
+    if (userPost) {
+      console.log("🎯 Processing as USER POST");
+
+      // Store original state for potential rollback
+      const originalLiked = userPost.liked;
+      const originalLikes = userPost.likes;
+
+      console.log(
+        "📊 Original user state - liked:",
+        originalLiked,
+        "likes:",
+        originalLikes
+      );
+
+      // Update USER posts state immediately (optimistic update)
+      setUserPosts((prevPosts) =>
+        prevPosts.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                liked: !post.liked,
+                likes: post.liked ? post.likes - 1 : post.likes + 1,
+              }
+            : post
+        )
+      );
+
+      try {
+        const result = await togglePostLike(postId);
+
+        if (result.success) {
+          console.log("✅ User post like successful");
+          Toast.show({
+            type: "success",
+            text1: !originalLiked ? "Post Liked!" : "Like Removed",
+            text2: "Your reaction has been saved",
+            visibilityTime: 1000,
+          });
+        } else {
+          console.log("❌ User post like failed - reverting");
+          // Revert user posts state
+          setUserPosts((prevPosts) =>
+            prevPosts.map((post) =>
+              post.id === postId
+                ? {
+                    ...post,
+                    liked: originalLiked,
+                    likes: originalLikes,
+                  }
+                : post
+            )
+          );
+
+          Toast.show({
+            type: "error",
+            text1: "Like Failed",
+            text2: result.error || "Failed to update like status",
+          });
+        }
+      } catch (error) {
+        console.error("❌ Error liking user post:", error);
+
+        // Revert user posts state
+        setUserPosts((prevPosts) =>
+          prevPosts.map((post) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  liked: originalLiked,
+                  likes: originalLikes,
+                }
+              : post
+          )
+        );
+
+        Toast.show({
+          type: "error",
+          text1: "Network Error",
+          text2: "Failed to like post. Please check your connection.",
+        });
+      }
+    } else if (demoPost) {
+      console.log("🎯 Processing as DEMO POST");
+
+      // Store original state for reference
+      const originalLiked = demoPost.liked;
+      const originalLikes = demoPost.likes;
+
+      console.log(
+        "📊 Original demo state - liked:",
+        originalLiked,
+        "likes:",
+        originalLikes
+      );
+
+      // Update DEMO posts state immediately
+      setPosts((prevPosts) =>
+        prevPosts.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                liked: !post.liked,
+                likes: post.liked ? post.likes - 1 : post.likes + 1,
+              }
+            : post
+        )
+      );
+
+      Toast.show({
+        type: "success",
+        text1: !originalLiked ? "Post Liked!" : "Like Removed",
+        text2: "Demo post updated locally",
+        visibilityTime: 1000,
+      });
+    } else {
+      console.error("❌ Post not found in any state:", postId);
+      console.log(
+        "🔍 Available user post IDs:",
+        userPosts.map((p) => p.id)
+      );
+      console.log(
+        "🔍 Available demo post IDs:",
+        posts.map((p) => p.id)
+      );
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Post not found",
+      });
+    }
+  };
+  const handleComment = async (postId) => {
+    console.log("💬 Handling comment for post:", postId);
+
+    // Find the post from either user posts or demo posts
+    let post =
+      userPosts.find((p) => p.id === postId) ||
+      posts.find((p) => p.id === postId);
+    const isUserPost = userPosts.some((p) => p.id === postId);
+
+    console.log("🔍 Found post:", !!post);
+    console.log("🔍 Is user post:", isUserPost);
+
+    if (isUserPost) {
+      console.log("🎯 Loading real comments from backend for user post");
+      // Load real comments from backend for user posts
+      try {
+        const result = await getPostComments(postId);
+
+        if (result.success) {
+          const transformedComments = result.data.map((comment) => ({
+            id: comment.id,
+            username: comment.username,
+            avatar: "Penguin.jpg", // Default avatar
+            text: comment.content,
+            timestamp: new Date(comment.createdDate),
+            likes: comment.likes || 0,
+            liked: false,
+          }));
+
+          console.log(
+            "✅ Loaded comments for user post:",
+            transformedComments.length
+          );
+          setComments(transformedComments);
+        } else {
+          console.log("ℹ️ No comments found for user post");
+          setComments([]);
+        }
+      } catch (error) {
+        console.error("❌ Error loading comments:", error);
+        setComments([]);
+      }
+    } else {
+      console.log("🎯 Loading demo comments for demo post");
+      // Use demo comments for demo posts
+      setComments([
+        {
+          id: 1,
+          username: "u/RedditUser1",
+          avatar: "commenter1.jpg",
+          text: "This is amazing! Love the content.",
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          likes: 12,
+          liked: false,
+        },
+        {
+          id: 2,
+          username: "u/SportsFan",
+          avatar: "commenter2.jpg",
+          text: "Great post! Thanks for sharing this.",
+          timestamp: new Date(Date.now() - 60 * 60 * 1000),
+          likes: 8,
+          liked: false,
+        },
+        {
+          id: 3,
+          username: "u/TechEnthusiast",
+          avatar: "commenter3.jpg",
+          text: "Really helpful information, thanks for sharing!",
+          timestamp: new Date(Date.now() - 30 * 60 * 1000),
+          likes: 5,
+          liked: false,
+        },
+      ]);
+    }
+
+    setSelectedPost(post);
+    setCommentModalVisible(true);
+  };
+
+  // Replace your existing handleAddComment function with this:
+  const handleAddComment = async (text, replyingTo = null) => {
+    if (!selectedPost) {
+      console.error("❌ No selected post for comment");
+      return;
+    }
+
+    const isUserPost = userPosts.some((p) => p.id === selectedPost.id);
+
+    console.log("💬 Adding comment to post:", selectedPost.id);
+    console.log("🔍 Is user post:", isUserPost);
+
+    if (isUserPost) {
+      console.log("🎯 Adding comment to backend for user post");
+      // Add comment to backend for user posts
+      try {
+        const result = await addPostComment(selectedPost.id, text);
+
+        if (result.success) {
+          const newComment = {
+            id: result.data.comment.id,
+            username: result.data.comment.username,
+            avatar: "Penguin.jpg",
+            text: result.data.comment.content,
+            timestamp: new Date(result.data.comment.createdDate),
+            likes: 0,
+            liked: false,
+          };
+
+          console.log("✅ Comment added to backend:", newComment);
+          setComments((prev) => [newComment, ...prev]);
+
+          // Update post comment count and refresh comments
+          setUserPosts((prevPosts) =>
+            prevPosts.map((post) =>
+              post.id === selectedPost.id
+                ? {
+                    ...post,
+                    comments: post.comments + 1,
+                    // Ensure we have the latest comment count
+                    commentCount: (post.commentCount || 0) + 1,
+                  }
+                : post
+            )
+          );
+
+          // Refresh comments to ensure we have the latest
+          handleComment(selectedPost.id);
+
+          Toast.show({
+            type: "success",
+            text1: "Comment Added",
+            text2: "Your comment has been saved to the database",
+          });
+        } else {
+          console.error("❌ Failed to add comment to backend:", result.error);
+          Toast.show({
+            type: "error",
+            text1: "Comment Failed",
+            text2: result.error,
+          });
+        }
+      } catch (error) {
+        console.error("❌ Error adding comment:", error);
+        Toast.show({
+          type: "error",
+          text1: "Network Error",
+          text2: "Failed to add comment",
+        });
+      }
+    } else {
+      console.log("🎯 Adding comment locally for demo post");
+      try {
+        // Add comment locally for demo posts
+        const newComment = {
+          id: Date.now(),
+          username: "u/CurrentUser",
+          avatar: "Penguin.jpg",
+          text: text,
+          timestamp: new Date(),
+          likes: 0,
+          liked: false,
+        };
+
+        console.log("✅ Comment added locally:", newComment);
+
+        // Update local comments state
+        setComments((prev) => [newComment, ...prev]);
+
+        // Update demo post comment count
+        setPosts((prevPosts) =>
+          prevPosts.map((post) =>
+            post.id === selectedPost.id
+              ? {
+                  ...post,
+                  comments: (post.comments || 0) + 1,
+                  commentCount: (post.commentCount || 0) + 1,
+                }
+              : post
+          )
+        );
+      } catch (error) {
+        console.error("❌ Error adding local comment:", error);
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to add comment",
+        });
+      }
+    }
+  };
+  // Update your existing onRefresh function
+  const onRefresh = async () => {
+    console.log("🔄 Refreshing posts...");
+    setRefreshing(true);
+
+    if (useBackend) {
+      const isConnected = await checkBackendConnection();
+
+      if (isConnected) {
+        await fetchBackendPosts(true);
+      } else {
+        console.log("📱 Backend unavailable, using local posts");
+        // Your existing refresh logic for local posts
+        setPosts((posts) =>
+          posts.map((post) => ({
+            ...post,
+            liked: false,
+            disliked: false,
+            saved: false,
+            awarded: false,
+          }))
+        );
+      }
+    } else {
+      // Your existing refresh logic for local posts
+      setPosts((posts) =>
+        posts.map((post) => ({
+          ...post,
+          liked: false,
+          disliked: false,
+          saved: false,
+          awarded: false,
+        }))
+      );
+    }
+
+    setRefreshing(false);
+  };
+
+  // Add new effect to initialize backend connection
+  useEffect(() => {
+    const initializeApp = async () => {
+      console.log("🚀 Initializing app...");
+
+      if (useBackend) {
+        const isConnected = await checkBackendConnection();
+
+        if (isConnected) {
+          await fetchBackendPosts(true);
+        } else {
+          console.log("📱 Backend unavailable, using local posts");
+          setUseBackend(false);
+        }
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // Update your postsToDisplay logic around line 875
+  const postsToDisplay = (() => {
+    if (useBackend && connectionStatus === "connected") {
+      // If backend is connected but has no posts, fall back to dummy posts
+      if (backendPosts.length === 0 && !loading) {
+        console.log("📱 Backend connected but empty, showing dummy posts");
+        return posts; // Your original dummy posts
+      }
+      return backendPosts;
+    }
+    return posts; // Your original dummy posts
+  })();
+
+  // Update your existing filteredPosts variable
+  const filteredPosts = postsToDisplay
     .filter((post) => {
       const q = (searchText || "").toLowerCase();
       return (
@@ -678,216 +1587,96 @@ const index = () => {
     })
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-  const handleLike = (id) => {
-    setPosts((posts) =>
-      posts.map((post) => {
-        if (post.id === id) {
-          if (post.liked) {
-            return { ...post, liked: false, likes: post.likes - 1 };
-          } else {
-            return {
-              ...post,
-              liked: true,
-              disliked: false,
-              likes: post.likes + 1,
-            };
-          }
-        }
-        return post;
-      })
-    );
-  };
-
-  const handleDislike = (id) => {
-    setPosts((posts) =>
-      posts.map((post) => {
-        if (post.id === id) {
-          if (post.disliked) {
-            return { ...post, disliked: false };
-          } else {
-            return {
-              ...post,
-              disliked: true,
-              liked: false,
-              likes: post.likes - 1,
-            };
-          }
-        }
-        return post;
-      })
-    );
-  };
-
-  const handleComment = (id) => {
-    const post = posts.find((p) => p.id === id);
-    setSelectedPost(post);
-    setCommentModalVisible(true);
-  };
-
-  const handleAddComment = (text, replyingTo = null) => {
-    const newComment = {
-      id: Date.now(),
-      username: "u/CurrentUser",
-      avatar: "Penguin.jpg",
-      text: text,
-      timestamp: new Date(),
-      likes: 0,
-      liked: false,
-      replyingTo: replyingTo,
-    };
-    setComments((prev) => [newComment, ...prev]);
-
-    // Update post comment count
-    setPosts((posts) =>
-      posts.map((post) => {
-        if (post.id === selectedPost.id) {
-          return { ...post, comments: post.comments + 1 };
-        }
-        return post;
-      })
-    );
-  };
-
-  const handleLikeComment = (commentId) => {
-    setComments((comments) =>
-      comments.map((comment) => {
-        if (comment.id === commentId) {
-          if (comment.liked) {
-            return { ...comment, liked: false, likes: comment.likes - 1 };
-          } else {
-            return { ...comment, liked: true, likes: comment.likes + 1 };
-          }
-        }
-        return comment;
-      })
-    );
-  };
-
-  const handleShare = async (id) => {
-    try {
-      const post = posts.find((p) => p.id === id);
-      if (!post) return;
-
-      const shareContent = {
-        title: post.title,
-        message: `${post.title}\n\nCheck out this post on Neoping!`,
-        url: `https://neoping.app/post/${id}`, // In a real app, this would be the actual post URL
-      };
-
-      // Platform-specific share options
-      const shareOptions =
-        Platform.OS === "ios"
-          ? {
-              excludedActivityTypes: [
-                "com.apple.UIKit.activity.Print",
-                "com.apple.UIKit.activity.AssignToContact",
-              ],
-            }
-          : {
-              dialogTitle: "Share this post",
-            };
-
-      const result = await Share.share(shareContent, shareOptions);
-
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // Shared with specific app
-          console.log(`Shared with: ${result.activityType}`);
-        } else {
-          // Shared, but no specific activity type
-          console.log("Shared successfully");
-        }
-      } else if (result.action === Share.dismissedAction) {
-        // Dismissed
-        console.log("Share dismissed");
-      }
-    } catch (error) {
-      console.error("Error sharing:", error);
-      alert("Failed to share post");
+  // Add load more functionality to your FlatList
+  const handleLoadMore = () => {
+    if (
+      useBackend &&
+      connectionStatus === "connected" &&
+      !loadingMore &&
+      hasMore &&
+      !loading
+    ) {
+      console.log("📄 Loading more backend posts...");
+      fetchBackendPosts(false);
     }
   };
 
-  const handleImagePress = (imageName) => {
-    setSelectedImage(imageMap[imageName] || { uri: imageName });
-    setImageModalVisible(true);
+  // ✅ Define the missing handleSearchIcon function
+  const handleSearchIcon = () => {
+    setSearchOpen(true);
   };
 
-  const handleShowUrlInput = () => setShowUrlInput(true);
-  const handleRemoveUrlInput = () => {
-    setShowUrlInput(false);
-    setUrl("");
+  // ✅ Missing handleDislike function
+  const handleDislike = (postId) => {
+    console.log("Dislike pressed for post:", postId);
+    // Add your dislike logic here
+    // For example: call API to dislike post, update local state, etc.
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setPosts((posts) =>
-        posts.map((post) => ({
-          ...post,
-          liked: false,
-          disliked: false,
-          saved: false,
-          awarded: false,
-        }))
-      );
-      setRefreshing(false);
-    }, 1200);
-  };
-
-  const handleSearchIcon = () => setSearchOpen(true);
+  // ✅ Missing handleCancelSearch function
   const handleCancelSearch = () => {
     setSearchOpen(false);
     setSearchText("");
   };
 
-  const handleSave = (id) => {
-    const post = posts.find((p) => p.id === id);
-    if (post) {
-      toggleBookmark(
-        {
-          id: post.id,
-          title: post.title,
-          image: post.image,
-          user: post.user,
-        },
-        DEFAULT_COLLECTION
-      );
-    }
+  // Add these missing functions to your index.jsx file
+
+  const handleShare = (postId) => {
+    console.log("Share pressed for post:", postId);
+    // Add your share logic here
+    // For example: open native share dialog
+    alert(`Share post: ${postId}`);
   };
 
-  const handleAward = (id) => {
-    setPosts((posts) =>
-      posts.map((post) =>
-        post.id === id ? { ...post, awarded: !post.awarded } : post
-      )
-    );
+  const handleImagePress = (imageSource) => {
+    console.log("Image pressed:", imageSource);
+    setSelectedImage(imageSource);
+    setImageModalVisible(true);
+  };
+
+  const handleSave = (postId) => {
+    console.log("Save pressed for post:", postId);
+    toggleBookmark(postId);
+  };
+
+  const handleAward = (postId) => {
+    console.log("Award pressed for post:", postId);
+    // Add your award logic here
+    alert(`Award given to post: ${postId}`);
   };
 
   const handleMorePress = (post) => {
+    console.log("More pressed for post:", post.id);
     setSelectedMorePost(post);
     setMoreMenuVisible(true);
   };
 
-  const handleBookmarkLongPress = (id) => {
-    const post = posts.find((p) => p.id === id);
-    if (post) {
-      setCollectionModalPost(post);
-      setCollectionModalVisible(true);
-    }
+  const handleProfilePress = (post) => {
+    console.log("Profile pressed for user:", post.user);
+    // Add your profile navigation logic here
+    alert(`View profile: ${post.user}`);
   };
 
-  const handleProfilePress = (post) => {
-    router.push({
-      pathname: "/profile",
-      params: {
-        user: JSON.stringify({
-          user: post.user,
-          avatar: post.avatar,
-          id: post.id,
-        }),
-        from: "root",
-      },
-    });
+  const handleLikeComment = (commentId) => {
+    console.log("Like comment:", commentId);
+    setComments(
+      comments.map((comment) =>
+        comment.id === commentId
+          ? {
+              ...comment,
+              liked: !comment.liked,
+              likes: comment.liked ? comment.likes - 1 : comment.likes + 1,
+            }
+          : comment
+      )
+    );
+  };
+
+  // Add this missing function for bookmark long press
+  const handleBookmarkLongPress = (postId) => {
+    console.log("Bookmark long press for post:", postId);
+    setCollectionModalPost({ id: postId });
+    setCollectionModalVisible(true);
   };
 
   if (loading) {
@@ -908,6 +1697,27 @@ const index = () => {
       style={[styles.container, { backgroundColor: themeColors.background }]}
     >
       <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Add connection status indicator */}
+      {useBackend && connectionStatus === "failed" && (
+        <View style={[styles.connectionBanner, { backgroundColor: "#e74c3c" }]}>
+          <Text style={styles.connectionBannerText}>
+            ⚠️ Backend unavailable - Using local data
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setUseBackend(true);
+              checkBackendConnection().then((connected) => {
+                if (connected) fetchBackendPosts(true);
+              });
+            }}
+            style={styles.retryButton}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Search Bar */}
       {searchOpen ? (
         <View
@@ -1067,11 +1877,36 @@ const index = () => {
         </View>
       ) : (
         <FlatList
-          data={filteredPosts}
-          keyExtractor={(item) => item.id}
+          data={(() => {
+            // Create hybrid posts: user posts first, then demo posts
+            const hybridPosts = [...userPosts, ...posts];
+
+            // Apply search filter if there's search text
+            if (searchText) {
+              const searchLower = searchText.toLowerCase();
+              return hybridPosts.filter(
+                (post) =>
+                  post.title?.toLowerCase().includes(searchLower) ||
+                  post.content?.toLowerCase().includes(searchLower) ||
+                  post.user?.toLowerCase().includes(searchLower)
+              );
+            }
+
+            return hybridPosts;
+          })()}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <Post
-              post={{ ...item, saved: isBookmarked(item.id) }}
+              post={{
+                ...item,
+                // Ensure all required fields exist with defaults
+                likes: item.likes || 0,
+                comments: item.comments || 0,
+                shares: item.shares || 0,
+                liked: item.liked || false,
+                saved: isBookmarked(item.id) || false,
+                awarded: item.awarded || false,
+              }}
               onLike={handleLike}
               onDislike={handleDislike}
               onComment={handleComment}
@@ -1089,14 +1924,34 @@ const index = () => {
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={() => (
-            <View style={{ alignItems: "center", marginTop: 40 }}>
-              <Text style={{ color: "#888", fontSize: 16 }}>
-                No posts to show. Pull to refresh!
-              </Text>
-            </View>
+            <EmptyPostsComponent
+              themeColors={themeColors}
+              onRefresh={onRefresh}
+              isBackend={useBackend}
+              isLoading={
+                loading || (useBackend && connectionStatus === "checking")
+              }
+            />
           )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={() =>
+            loadingMore ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color="#2E45A3" />
+                <Text
+                  style={[
+                    styles.loadMoreText,
+                    { color: themeColors.textSecondary },
+                  ]}
+                >
+                  Loading more posts...
+                </Text>
+              </View>
+            ) : null
           }
         />
       )}
@@ -1215,40 +2070,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#111",
-    paddingTop: Platform.OS === "ios" ? 64 : 36,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "rgba(0,0,0,0.08)",
+    paddingTop: Platform.OS === "ios" ? 50 : 40, // Account for status bar
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.1)",
     ...Platform.select({
       web: {
-        boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
+        paddingTop: 12,
       },
-      default: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
+      ios: {
+        paddingTop: 50, // Extra space for iOS status bar
+      },
+      android: {
+        paddingTop: 40, // Space for Android status bar
       },
     }),
   },
   headerLeft: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-  },
-  logoText: {
-    color: "#2E45A3",
-    fontWeight: "bold",
-    fontSize: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 10,
   },
   headerIcons: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  logoText: {
+    color: "#2E45A3",
+    fontWeight: "bold",
+    fontSize: Platform.OS === "web" ? 22 : 20, // Slightly smaller on mobile
+    marginLeft: Platform.OS === "web" ? 10 : 4,
   },
   // Comment Modal Styles
   commentModalBackdrop: {
@@ -1378,6 +2231,123 @@ const styles = StyleSheet.create({
   replyText: {
     fontSize: 14,
   },
+  // Empty State Styles
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+    minHeight: 500,
+  },
+  emptyIconContainer: {
+    position: "relative",
+    marginBottom: 32,
+  },
+  emptyIconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      web: {
+        boxShadow: "0px 8px 32px rgba(46, 69, 163, 0.15)",
+      },
+      default: {
+        shadowColor: "#2E45A3",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 8,
+      },
+    }),
+  },
+  particle: {
+    position: "absolute",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.6,
+  },
+  particle1: {
+    top: 20,
+    right: 10,
+    transform: [{ rotate: "45deg" }],
+  },
+  particle2: {
+    bottom: 15,
+    left: 15,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  particle3: {
+    top: 60,
+    left: -10,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 32,
+    maxWidth: 280,
+  },
+  emptyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginBottom: 40,
+    ...Platform.select({
+      web: {
+        boxShadow: "0px 4px 16px rgba(46, 69, 163, 0.3)",
+      },
+      default: {
+        shadowColor: "#2E45A3",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
+  },
+  emptyButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  emptyTips: {
+    width: "100%",
+    maxWidth: 300,
+  },
+  tipItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  tipEmoji: {
+    fontSize: 20,
+    marginRight: 12,
+    width: 30,
+    textAlign: "center",
+  },
+  tipText: {
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
   commentInputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -1401,6 +2371,42 @@ const styles = StyleSheet.create({
   commentSubmitText: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  connectionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    marginHorizontal: 8,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  connectionBannerText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+    flex: 1,
+  },
+  retryButton: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  loadMoreContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadMoreText: {
+    marginLeft: 10,
+    fontSize: 14,
   },
 });
 

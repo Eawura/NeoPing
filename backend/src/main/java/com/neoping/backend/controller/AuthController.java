@@ -19,8 +19,6 @@ import com.neoping.backend.dto.AuthenticationResponse;
 import com.neoping.backend.dto.LoginRequest;
 import com.neoping.backend.dto.RefreshTokenRequest;
 import com.neoping.backend.dto.RegisterRequest;
-import com.neoping.backend.dto.UpdateProfileRequest;
-import com.neoping.backend.dto.UserProfile;
 import com.neoping.backend.model.User;
 import com.neoping.backend.service.AuthService;
 import com.neoping.backend.service.RefreshTokenService;
@@ -40,8 +38,16 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody RegisterRequest registerRequest) {
-        authService.signup(registerRequest);
-        return new ResponseEntity<>("User registered successfully", HttpStatus.OK);
+        try {
+            logger.info("Signup attempt for user: {}", registerRequest.getUsername());
+            authService.signup(registerRequest);
+            logger.info("Signup successful for user: {}", registerRequest.getUsername());
+            return new ResponseEntity<>("User registered successfully", HttpStatus.OK);
+        } catch (Exception e) {
+            logger.error("Signup failed for user: {}", registerRequest.getUsername(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Signup failed: " + e.getMessage());
+        }
     }
 
     @GetMapping("/accountVerification/{token}")
@@ -52,11 +58,32 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthenticationResponse> login(@RequestBody LoginRequest loginRequest) {
-        AuthenticationResponse response = authService.login(loginRequest);
-        logger.info("Login successful for user: {}", loginRequest.getUsername());
-        logger.info("Response body: {}", response);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+        try {
+            logger.info("Login attempt for user: {}", loginRequest.getUsername());
+            AuthenticationResponse response = authService.login(loginRequest);
+            logger.info("Login successful for user: {}", loginRequest.getUsername());
+            logger.info("Response body: {}", response);
+            return ResponseEntity.ok(response);
+        } catch (com.neoping.backend.exception.SpringRedditException e) {
+            logger.error("Login failed for user: {} - {}", loginRequest.getUsername(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "timestamp", System.currentTimeMillis(),
+                            "status", HttpStatus.UNAUTHORIZED.value(),
+                            "error", "Unauthorized",
+                            "message", "Invalid username or password",
+                            "path", "/api/auth/login"));
+        } catch (Exception e) {
+            logger.error("Unexpected error during login for user: {}", loginRequest.getUsername(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "timestamp", System.currentTimeMillis(),
+                            "status", HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                            "error", "Internal Server Error",
+                            "message", "An unexpected error occurred during login",
+                            "path", "/api/auth/login"));
+        }
     }
 
     @PostMapping("/refresh/token")
@@ -93,69 +120,34 @@ public class AuthController {
         return ResponseEntity.ok("Logout successful");
     }
 
-    @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> getCurrentUser() {
+    @GetMapping("/debug/user/{username}")
+    public ResponseEntity<?> checkUserExists(@PathVariable String username) {
         try {
-            logger.info("Attempting to get current user...");
-            User user = userService.getCurrentUser();
-            logger.info("Retrieved user: {}", user != null ? user.getUsername() : "null");
-
-            if (user == null) {
-                logger.warn("No authenticated user found");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                        Map.of(
-                                "status", 401,
-                                "error", "Unauthorized",
-                                "message", "No authenticated user found"));
-            }
-
-            UserProfile profile = UserProfile.builder()
-                    .id(user.getId())
-                    .username(user.getUsername())
-                    .email(user.getEmail())
-                    .bio(user.getBio())
-                    .avatar(user.getAvatar())
-                    .build();
-
-            logger.info("Successfully built profile for user: {}", user.getUsername());
-            return ResponseEntity.ok(profile);
-
+            boolean exists = userService.userExists(username);
+            return ResponseEntity.ok(Map.of(
+                    "username", username,
+                    "exists", exists,
+                    "timestamp", System.currentTimeMillis()));
         } catch (Exception e) {
-            logger.error("Error getting current user", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                    Map.of(
-                            "status", 500,
-                            "error", "Internal Server Error",
-                            "message", "An error occurred while retrieving user profile"));
+            logger.error("Error checking user existence for: {}", username, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error checking user existence"));
         }
     }
 
-    @PutMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> updateProfile(@RequestBody UpdateProfileRequest updateRequest) {
+    @GetMapping("/debug/users")
+    public ResponseEntity<?> getAllUsers() {
         try {
-            logger.info("Attempting to update user profile...");
-            User updatedUser = userService.updateUserProfile(updateRequest);
-            logger.info("Successfully updated profile for user: {}", updatedUser.getUsername());
-
-            UserProfile profile = UserProfile.builder()
-                    .id(updatedUser.getId())
-                    .username(updatedUser.getUsername())
-                    .email(updatedUser.getEmail())
-                    .bio(updatedUser.getBio())
-                    .avatar(updatedUser.getAvatar())
-                    .build();
-
-            return ResponseEntity.ok(profile);
-
+            var users = userService.getAllUsersBasicInfo();
+            return ResponseEntity.ok(Map.of(
+                    "users", users,
+                    "count", users.size(),
+                    "timestamp", System.currentTimeMillis()));
         } catch (Exception e) {
-            logger.error("Error updating user profile", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                    Map.of(
-                            "status", 500,
-                            "error", "Internal Server Error",
-                            "message", "An error occurred while updating user profile"));
+            logger.error("Error getting all users", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error getting users"));
         }
     }
+
 }

@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.BeanIds;
@@ -69,8 +70,33 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        // ✅ Allow public access to health and status endpoints
+                        .requestMatchers("/api/health", "/api/status").permitAll()
+
+                        // ✅ Allow public access to authentication endpoints (login, signup, etc.)
+                        .requestMatchers("/api/auth/login", "/api/auth/signup", "/api/auth/refresh/token",
+                                "/api/auth/logout")
+                        .permitAll()
+                        .requestMatchers("/api/auth/accountVerification/**").permitAll()
+                        .requestMatchers("/api/auth/debug/**").permitAll()
+
+                        // ✅ Allow public GET access to comments (viewing comments without login)
+                        .requestMatchers(HttpMethod.GET, "/api/comments/**").permitAll()
+                        // Removed public GET access to posts; all /api/posts/** now require
+                        // authentication
+
+                        // ✅ Require authentication for POST, PUT, DELETE operations
+                        .requestMatchers(HttpMethod.POST, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/comments/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/comments/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/comments/**").authenticated()
+
+                        // ✅ Require authentication for all other requests
                         .anyRequest().authenticated())
+
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

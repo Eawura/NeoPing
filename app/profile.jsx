@@ -3,8 +3,10 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -100,11 +102,42 @@ const ProfileView = () => {
     newsPosts,
     selectedPost: selectedPostParam,
   } = useLocalSearchParams();
-  const { profile: currentUser, loading, error, refreshProfile } = useProfile();
+
+  // Get profile and methods from ProfileContext
+  const {
+    profile,
+    updateProfile,
+    loading: profileLoading,
+    error: profileError,
+    refreshProfile,
+  } = useProfile();
+  const currentUser = profile;
+
   const { posts: globalPosts, setPosts } = usePosts();
 
+  // State for edit form
+  const [editUsername, setEditUsername] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editWebsite, setEditWebsite] = useState("");
+  const [editAvatar, setEditAvatar] = useState("");
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [avatarUri, setAvatarUri] = useState(null);
+
+  // Initialize edit fields when profile loads
+  useEffect(() => {
+    if (profile.username) {
+      setEditUsername(profile.username);
+      setEditBio(profile.bio || "");
+      setEditLocation(profile.location || "");
+      setEditWebsite(profile.website || "");
+      setEditAvatar(profile.avatar || "");
+    }
+  }, [profile]);
+
+  // Handle saving edited profile
   // Handle loading state
-  if (loading) {
+  if (profileLoading) {
     return (
       <View
         style={[
@@ -121,7 +154,7 @@ const ProfileView = () => {
   }
 
   // Handle error state
-  if (error) {
+  if (profileError) {
     return (
       <View
         style={[
@@ -136,9 +169,9 @@ const ProfileView = () => {
             marginBottom: 20,
           }}
         >
-          {error.includes("401")
+          {profileError.includes("401")
             ? "Please log in to view your profile"
-            : `Error: ${error}`}
+            : `Error: ${profileError}`}
         </Text>
         <TouchableOpacity
           style={[
@@ -153,13 +186,13 @@ const ProfileView = () => {
             },
           ]}
           onPress={
-            error.includes("401")
+            profileError.includes("401")
               ? () => router.push("/(auth)/login")
               : refreshProfile
           }
         >
           <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
-            {error.includes("401") ? "Go to Login" : "Retry"}
+            {profileError.includes("401") ? "Go to Login" : "Retry"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -483,21 +516,11 @@ const ProfileView = () => {
   // Simulate dynamic followers/following and follow state
   const [isFollowing, setIsFollowing] = useState(false);
   const [followers, setFollowers] = useState(
-    user.followers || Math.floor(Math.random() * 1000) + 100
+    user?.followers || Math.floor(Math.random() * 1000) + 100
   );
   const [following] = useState(
-    user.following || Math.floor(Math.random() * 200) + 50
+    user?.following || Math.floor(Math.random() * 200) + 50
   );
-  const [profile, setProfile] = useState({
-    username: user?.user || user?.author || "User",
-    bio: user.bio || "No bio yet.",
-    avatar: user.avatar || "commenter1.jpg",
-  });
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editUsername, setEditUsername] = useState(profile.username);
-  const [editBio, setEditBio] = useState(profile.bio);
-  const [editAvatar, setEditAvatar] = useState(profile.avatar);
-  const [avatarUri, setAvatarUri] = useState(null);
 
   const handleFollow = () => {
     setIsFollowing((f) => !f);
@@ -509,16 +532,39 @@ const ProfileView = () => {
     setEditBio(profile.bio);
     setEditAvatar(profile.avatar);
     setAvatarUri(null);
+    setEditLocation(profile.location || "");
+    setEditWebsite(profile.website || "");
     setEditModalVisible(true);
   };
 
-  const handleSaveEdit = () => {
-    setProfile({
+  // Replace your handleSaveEdit function (around line 570):
+  const handleSaveEdit = async () => {
+    console.log("🚀 Starting profile save via context...");
+
+    const profileData = {
       username: editUsername,
       bio: editBio,
-      avatar: avatarUri ? avatarUri : editAvatar,
-    });
-    setEditModalVisible(false);
+      avatar: avatarUri || editAvatar,
+      location: editLocation,
+      website: editWebsite,
+    };
+
+    console.log("📤 Sending profile data:", profileData);
+
+    // Use context update function
+    const result = await updateProfile(profileData);
+
+    if (result.success) {
+      console.log("✅ Profile updated successfully!");
+      setEditModalVisible(false);
+    } else {
+      console.error("❌ Failed to update profile:", result.error);
+      // Show error to user
+      Alert.alert(
+        "Error",
+        "Failed to update profile: " + (result.error || "Unknown error")
+      );
+    }
   };
 
   const pickAvatar = async () => {
@@ -717,7 +763,7 @@ const ProfileView = () => {
             )}
           </TouchableOpacity>
           <Text style={[styles.username, { color: themeColors.text }]}>
-            {displayUsername}
+            u/{profile.username || currentUser?.username || "user"}
           </Text>
           <Text style={[styles.bio, { color: themeColors.textSecondary }]}>
             {profile.bio}
@@ -1190,6 +1236,36 @@ const ProfileView = () => {
               maxLength={120}
               multiline
               accessibilityLabel="Edit bio"
+            />
+            <Text
+              style={[styles.editLabel, { color: themeColors.textSecondary }]}
+            >
+              Location
+            </Text>
+            <TextInput
+              style={[
+                styles.editInput,
+                { color: themeColors.text, borderColor: themeColors.border },
+              ]}
+              value={editLocation}
+              onChangeText={setEditLocation}
+              maxLength={50}
+              accessibilityLabel="Edit location"
+            />
+            <Text
+              style={[styles.editLabel, { color: themeColors.textSecondary }]}
+            >
+              Website
+            </Text>
+            <TextInput
+              style={[
+                styles.editInput,
+                { color: themeColors.text, borderColor: themeColors.border },
+              ]}
+              value={editWebsite}
+              onChangeText={setEditWebsite}
+              maxLength={100}
+              accessibilityLabel="Edit website"
             />
             <View style={styles.editModalActions}>
               <TouchableOpacity

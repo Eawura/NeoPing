@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { getCurrentUser, isAuthenticated } from "../app/services/authService";
+import { createContext, useContext, useEffect, useState } from "react";
+import { userAPI } from "../app/utils/api"; // ✅ Use our API instead
 
 const defaultProfile = {
   username: "u/User",
   email: "",
   bio: "This is my bio.",
-  avatar: "commenter1.jpg", // default avatar key matching imageMap
+  avatar: "commenter1.jpg",
+  location: "",
+  website: "",
 };
 
 const ProfileContext = createContext({
@@ -14,6 +16,7 @@ const ProfileContext = createContext({
   loading: true,
   error: null,
   refreshProfile: () => {},
+  updateProfile: () => {}, // ✅ Add update function
 });
 
 export function ProfileProvider({ children }) {
@@ -23,52 +26,89 @@ export function ProfileProvider({ children }) {
 
   const fetchProfile = async () => {
     try {
-      console.log("[ProfileContext] Fetching profile...");
+      console.log("[ProfileContext] 🔍 Fetching profile from API...");
       setLoading(true);
       setError(null);
 
-      // Check authentication status
-      const authenticated = await isAuthenticated();
-      console.log("[ProfileContext] Authentication status:", authenticated);
+      // ✅ Use our userAPI instead of authService
+      const result = await userAPI.getCurrentUserProfile();
 
-      if (!authenticated) {
+      if (result.success) {
+        const userData = result.data;
+        console.log("[ProfileContext] ✅ Profile loaded:", userData);
+
+        const updatedProfile = {
+          username: userData.displayName || userData.username || "User",
+          email: userData.email || "",
+          bio: userData.bio || "No bio yet.",
+          avatar: userData.avatar || "commenter1.jpg",
+          location: userData.location || "",
+          website: userData.website || "",
+        };
+
         console.log(
-          "[ProfileContext] User not authenticated, skipping profile fetch"
+          "[ProfileContext] 🔄 Setting profile state:",
+          updatedProfile
         );
-        setLoading(false);
-        return;
+        setProfile(updatedProfile);
+      } else {
+        console.error(
+          "[ProfileContext] ❌ Failed to fetch profile:",
+          result.error
+        );
+        setError(result.error);
       }
-
-      // Verify token is available
-      const token = await storage.getItem("auth_token");
-      console.log(
-        "[ProfileContext] Auth token available:",
-        token ? "Yes" : "No"
-      );
-
-      console.log("[ProfileContext] Fetching current user data...");
-      const userData = await getCurrentUser();
-      console.log("[ProfileContext] Received user data:", userData);
-
-      const updatedProfile = {
-        ...defaultProfile,
-        ...userData,
-        // Map backend fields to frontend fields if needed
-        username: userData.username || defaultProfile.username,
-        email: userData.email || "",
-      };
-
-      console.log("[ProfileContext] Updating profile with:", updatedProfile);
-      setProfile(updatedProfile);
     } catch (err) {
-      console.error("Failed to fetch user profile:", err);
+      console.error("[ProfileContext] ❌ Error fetching profile:", err);
       setError(err.message || "Failed to load profile");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch profile on mount and when authentication state changes
+  // ✅ Add update profile function
+  const updateProfile = async (profileData) => {
+    try {
+      console.log("[ProfileContext] 🔄 Updating profile...", profileData);
+      setLoading(true);
+
+      const result = await userAPI.updateCurrentUserProfile(profileData);
+
+      if (result.success) {
+        console.log(
+          "[ProfileContext] ✅ Profile updated successfully:",
+          result.data
+        );
+
+        // Update local state with backend response
+        const updatedProfile = {
+          username: result.data.displayName || result.data.username,
+          email: result.data.email || "",
+          bio: result.data.bio || "No bio yet.",
+          avatar: result.data.avatar || "commenter1.jpg",
+          location: result.data.location || "",
+          website: result.data.website || "",
+        };
+
+        setProfile(updatedProfile);
+        return { success: true, data: updatedProfile };
+      } else {
+        console.error(
+          "[ProfileContext] ❌ Failed to update profile:",
+          result.error
+        );
+        setError(result.error);
+        return { success: false, error: result.error };
+      }
+    } catch (err) {
+      console.error("[ProfileContext] ❌ Error updating profile:", err);
+      setError(err.message || "Failed to update profile");
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -81,6 +121,7 @@ export function ProfileProvider({ children }) {
         loading,
         error,
         refreshProfile: fetchProfile,
+        updateProfile, // ✅ Expose update function
       }}
     >
       {children}
