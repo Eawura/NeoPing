@@ -2,6 +2,8 @@ package com.neoping.backend.security;
 
 import java.io.IOException;
 
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +18,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+@RequiredArgsConstructor
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class);
@@ -24,16 +27,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final java.util.Set<String> usedJwtTokensForGetPosts = java.util.Collections
             .synchronizedSet(new java.util.HashSet<>());
 
-    @Autowired
-    private JwtProvider jwtProvider;
+    private final JwtProvider jwtProvider;
 
-    @Autowired
-    private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
+
+    private final org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         String path = request.getServletPath();
         log.debug("[JWT FILTER] Path: {} Method: {}", path, request.getMethod());
