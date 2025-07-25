@@ -11,6 +11,7 @@ public class PostRequest {
     private String title;
     private String url;
     private String description;
+    private String category; // Added for post category support
 
     // --- Extended fields for create.jsx compatibility ---
     private String image; // image URL or filename
@@ -28,6 +29,7 @@ public class PostRequest {
                 "title='" + title + '\'' +
                 ", url='" + url + '\'' +
                 ", description='" + description + '\'' +
+                ", category='" + category + '\'' +
                 ", image='" + image + '\'' +
                 ", video='" + video + '\'' +
                 ", pollQuestion='" + pollQuestion + '\'' +

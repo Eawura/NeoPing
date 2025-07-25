@@ -3,6 +3,7 @@ package com.neoping.backend.controller;
 import java.security.Principal;
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,30 +24,14 @@ import lombok.RequiredArgsConstructor;
 public class NewsController {
     private final NewsService newsService;
 
-    @GetMapping
-    public ResponseEntity<List<NewsDto>> getNews(
-            @RequestParam(defaultValue = "All") String category,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(newsService.getNews(category, search, page, limit));
+    // Create a news article
+    @PostMapping
+    public ResponseEntity<NewsDto> createNews(@RequestBody NewsDto newsDto) {
+        NewsDto created = newsService.createNews(newsDto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    // Upvote a news article
-    @PostMapping("/{id}/upvote")
-    public ResponseEntity<Void> upvoteNews(@PathVariable Long id, Principal principal) {
-        newsService.upvoteNews(id, principal.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    // Downvote a news article
-    @PostMapping("/{id}/downvote")
-    public ResponseEntity<Void> downvoteNews(@PathVariable Long id, Principal principal) {
-        newsService.downvoteNews(id, principal.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    // Add a comment to a news article
+    // 1. Add a comment to a news article
     @PostMapping("/{id}/comment")
     public ResponseEntity<Void> addComment(
             @PathVariable Long id,
@@ -56,12 +41,48 @@ public class NewsController {
         return ResponseEntity.ok().build();
     }
 
-    // Bookmark a news article
-    @PostMapping("/{id}/bookmark")
-    public ResponseEntity<Void> bookmarkNews(@PathVariable Long id, Principal principal) {
-        newsService.bookmarkNews(id, principal.getName());
+    // 2. Get comments for a news article
+    @GetMapping("/{id}/comments")
+    public ResponseEntity<List<String>> getCommentsForNews(@PathVariable Long id) {
+        List<String> comments = newsService.getCommentsForNews(id);
+        return ResponseEntity.ok(comments);
+    }
+
+    // 3. List news articles (supports search, category, pagination)
+    @GetMapping
+    public ResponseEntity<List<NewsDto>> getNews(
+            @RequestParam(defaultValue = "All") String category,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(newsService.getNews(category, search, page, limit));
+    }
+
+    // 4. Get news article by ID
+    @GetMapping("/{id}")
+    public ResponseEntity<NewsDto> getNewsById(@PathVariable Long id) {
+        NewsDto news = newsService.getNewsById(id);
+        return ResponseEntity.ok(news);
+    }
+
+    // 5. Upvote a news article
+    @PostMapping("/{id}/upvote")
+    public ResponseEntity<Void> upvoteNews(@PathVariable Long id, Principal principal) {
+        newsService.upvoteNews(id, principal.getName());
         return ResponseEntity.ok().build();
     }
 
-    // Add endpoints for upvote, downvote, comment, bookmark as needed
+    // 6. Downvote a news article
+    @PostMapping("/{id}/downvote")
+    public ResponseEntity<Void> downvoteNews(@PathVariable Long id, Principal principal) {
+        newsService.downvoteNews(id, principal.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    // 7. Bookmark a news article
+    @PostMapping("/{id}/bookmark")
+    public ResponseEntity<String> bookmarkNews(@PathVariable Long id, Principal principal) {
+        newsService.bookmarkNews(id, principal.getName());
+        return ResponseEntity.ok("Bookmarked successfully");
+    }
 }

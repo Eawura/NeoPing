@@ -3,9 +3,9 @@ package com.neoping.backend.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional // ✅ Restore this - it's safe now with authenticated users
 @Slf4j
 public class PostService {
-
     // ✅ NEW: LikeResult helper class
     public static class LikeResult {
         private final boolean liked;
@@ -47,10 +46,27 @@ public class PostService {
     }
 
     private final PostRepository postRepository;
+
     private final UserRepository userRepository;
     private final AuthService authService;
-
     private final PostMapper postMapper;
+
+    // ✅ NEW: Delete post by ID
+    public void deletePost(Long postId, String currentUsername) {
+        try {
+            log.info("🗑️ PostService: Deleting post {} by user {}", postId, currentUsername);
+            Post post = postRepository.findById(postId)
+                    .orElseThrow(() -> new RuntimeException("Post not found with id: " + postId));
+            if (currentUsername != null && !post.getUser().getUsername().equals(currentUsername)) {
+                throw new RuntimeException("User not authorized to delete this post");
+            }
+            postRepository.delete(post);
+            log.info("✅ Post deleted: {}", postId);
+        } catch (Exception e) {
+            log.error("❌ Error deleting post: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to delete post", e);
+        }
+    }
 
     // ✅ EXISTING: Basic get all posts
     public List<PostResponse> getAllPosts() {
@@ -268,5 +284,33 @@ public class PostService {
                 .stream()
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
+    }
+
+    // ✅ NEW: Update post by ID
+    public PostResponse updatePost(Long postId, PostRequest postRequest, String currentUsername) {
+        try {
+            log.info("✏️ PostService: Updating post {} by user {}", postId, currentUsername);
+
+            Post post = postRepository.findById(postId)
+                    .orElseThrow(() -> new RuntimeException("Post not found with id: " + postId));
+
+            // Optionally, check if current user is allowed to update
+            if (currentUsername != null && !post.getUser().getUsername().equals(currentUsername)) {
+                throw new RuntimeException("User not authorized to update this post");
+            }
+
+            // Update fields (only those allowed)
+            post.setTitle(postRequest.getTitle());
+            post.setDescription(postRequest.getDescription());
+            post.setCategory(postRequest.getCategory());
+            // Add more fields as needed
+
+            postRepository.save(post);
+            log.info("✅ Post updated: {}", postId);
+            return postMapper.mapToDto(post);
+        } catch (Exception e) {
+            log.error("❌ Error updating post: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to update post", e);
+        }
     }
 }

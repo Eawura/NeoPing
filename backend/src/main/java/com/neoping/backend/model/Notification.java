@@ -1,5 +1,6 @@
 package com.neoping.backend.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,6 +25,7 @@ public class Notification {
     private String action;
     private String content;
     private String time;
+    @Column(name = "is_read", nullable = false)
     private boolean read;
     private String postId;
     private String commentId;
