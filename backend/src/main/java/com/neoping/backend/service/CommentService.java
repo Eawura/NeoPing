@@ -24,15 +24,33 @@ import lombok.extern.slf4j.Slf4j;
 @AllArgsConstructor
 @Slf4j
 public class CommentService {
-
         private static final String POST_URL = "http://localhost:8082/api/posts/";
 
         private final PostRepository postRepository;
+
         private final UserRepository userRepository;
+
         private final CommentRepository commentRepository;
         private final CommentMapper commentMapper;
         private final MailContentBuilder mailContentBuilder;
         private final MailService mailService;
+
+        // ✅ NEW: Update a comment by ID
+        public void updateComment(Long id, CommentDto commentDto) {
+                Comment comment = commentRepository.findById(id)
+                                .orElseThrow(() -> new SpringRedditException("Comment not found with id: " + id));
+                // Update allowed fields (e.g., content)
+                comment.setContent(commentDto.getContent());
+                comment.setUpdatedAt(LocalDateTime.now());
+                commentRepository.save(comment);
+        }
+
+        // ✅ NEW: Delete a comment by ID
+        public void deleteComment(Long id) {
+                Comment comment = commentRepository.findById(id)
+                                .orElseThrow(() -> new SpringRedditException("Comment not found with id: " + id));
+                commentRepository.delete(comment);
+        }
 
         public void save(CommentDto commentDto) {
                 Post post = postRepository.findById(commentDto.getPostId())
